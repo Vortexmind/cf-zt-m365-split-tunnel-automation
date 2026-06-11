@@ -4,10 +4,9 @@
     "module": "ES2022",
     "moduleResolution": "bundler",
     "strict": true,
-    "types": ["@cloudflare/workers-types"],
     "outDir": "dist",
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*", "test/**/*", "worker-configuration.d.ts"]
 }

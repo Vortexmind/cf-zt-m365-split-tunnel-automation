@@ -13,11 +13,6 @@ export interface M365EndpointSet {
   notes?: string;
 }
 
-export interface M365VersionResponse {
-  instance: string;
-  latest: string;
-}
-
 // Cloudflare API types
 export interface SplitTunnelEntryAddress {
   address: string;

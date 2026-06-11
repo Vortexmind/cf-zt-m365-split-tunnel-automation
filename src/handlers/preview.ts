@@ -1,4 +1,5 @@
 import { Config } from "../config";
+import { SplitTunnelEntry } from "../types";
 import { loadState, saveState, generateClientRequestId } from "../state";
 import { fetchLatestVersion, fetchEndpoints } from "../m365/client";
 import { transformEndpoints } from "../m365/transform";
@@ -15,20 +16,22 @@ export interface PreviewResult {
   removed: Array<{ key: string; type: "address" | "host"; description: string }>;
   toKeep: number;
   totalAfter: number;
+  versionWarning?: string;
 }
 
-/**
- * Generate a preview of what would change without writing anything.
- * Always acts as dry-run regardless of config.dryRun.
- */
+function toSummary(entry: SplitTunnelEntry): { key: string; type: "address" | "host"; description: string } {
+  if ("address" in entry) {
+    return { key: entry.address, type: "address", description: entry.description ?? "" };
+  }
+  return { key: entry.host, type: "host", description: entry.description ?? "" };
+}
+
 export async function executePreview(
   kv: KVNamespace,
   config: Config
 ): Promise<PreviewResult> {
-  // Load state
   let state = await loadState(kv);
 
-  // Generate clientRequestId if not present
   if (!state.clientRequestId) {
     state = {
       ...state,
@@ -37,22 +40,21 @@ export async function executePreview(
     await saveState(kv, { clientRequestId: state.clientRequestId });
   }
 
-  // Fetch M365 version (always, to show current version)
   let version: string;
+  let versionWarning: string | undefined;
   try {
     version = await fetchLatestVersion(config.m365Instance, state.clientRequestId);
-  } catch {
+  } catch (err) {
     version = state.lastVersion;
+    versionWarning = `Version check failed: ${String(err)}`;
   }
 
-  // Fetch M365 endpoints (always, even if version unchanged)
   const endpointSets = await fetchEndpoints(
     config.m365Instance,
     state.clientRequestId,
     { serviceAreas: config.m365Services, noIpv6: config.m365NoIpv6 }
   );
 
-  // Transform to candidates
   const candidates = transformEndpoints(endpointSets, {
     services: config.m365Services,
     categories: config.m365Categories,
@@ -61,26 +63,12 @@ export async function executePreview(
     managedTag: config.managedTag,
   });
 
-  // Get current CF exclude list
   const currentEntries = await getAllExcludeEntries(config.accountId, config.policyId, config.apiToken);
 
-  // Reconcile
   const reconcileResult = reconcile(currentEntries, candidates, config.managedTag);
 
-  // Build detailed added/removed lists
-  const added = reconcileResult.added.map((entry) => {
-    if ("address" in entry) {
-      return { key: entry.address, type: "address" as const, description: entry.description ?? "" };
-    }
-    return { key: entry.host, type: "host" as const, description: entry.description ?? "" };
-  });
-
-  const removed = reconcileResult.removed.map((entry) => {
-    if ("address" in entry) {
-      return { key: entry.address, type: "address" as const, description: entry.description ?? "" };
-    }
-    return { key: entry.host, type: "host" as const, description: entry.description ?? "" };
-  });
+  const added = reconcileResult.added.map(toSummary);
+  const removed = reconcileResult.removed.map(toSummary);
 
   return {
     version,
@@ -92,5 +80,6 @@ export async function executePreview(
     removed,
     toKeep: reconcileResult.preserved.length + reconcileResult.managedAfter.length - reconcileResult.added.length,
     totalAfter: reconcileResult.merged.length,
+    ...(versionWarning ? { versionWarning } : {}),
   };
 }

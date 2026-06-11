@@ -1,40 +1,47 @@
 {
-  // Split Tunnel Automation Worker
-  // Syncs M365 endpoints to Cloudflare Zero Trust split tunnel config
-  "name": "split-tunnel-automation",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-06-10",
-  "compatibility_flags": ["nodejs_compat"],
-  "triggers": {
-    "crons": ["17 6 * * *"]
-  },
-  "kv_namespaces": [
-    {
-      "binding": "STATE",
-      "id": "TODO_REPLACE_WITH_KV_NAMESPACE_ID",
-      "preview_id": "TODO_REPLACE_WITH_KV_PREVIEW_ID"
-    }
-  ],
-  "vars": {
-    // Cloudflare account ID (required)
-    "CF_ACCOUNT_ID": "",
-    // Zero Trust split tunnel policy ID; empty = default profile
-    "CF_POLICY_ID": "",
-    // M365 instance (Worldwide, China, USGovDoD, USGovGCCHigh)
-    "M365_INSTANCE": "Worldwide",
-    // Comma-separated service areas, or "all" for no API-level filter
-    "M365_SERVICES": "all",
-    // Comma-separated categories to include
-    "M365_CATEGORIES": "Optimize,Allow",
-    // Whether to include IPv6 addresses
-    "INCLUDE_IPV6": "true",
-    // Whether to include URL/host entries
-    "INCLUDE_URLS": "true",
-    // Tag prefix for managed entries
-    "MANAGED_TAG": "[m365-auto]",
-    // If true, compute changes but do not apply them
-    "DRY_RUN": "false",
-    // Maximum number of entries per split tunnel list
-    "MAX_ENTRIES": "1000"
-  }
+	// Split Tunnel Automation Worker
+	// Syncs M365 endpoints to Cloudflare Zero Trust split tunnel config
+	"name": "split-tunnel-automation",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-10",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"triggers": {
+		"crons": [
+			"17 6 * * *"
+		]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "STATE",
+			"id": "c5af3b94eb0249519081b99a465b509a"
+		}
+	],
+	"vars": {
+		// Cloudflare account ID (required — set via dashboard or --var)
+		"CF_ACCOUNT_ID": "",
+		// Zero Trust split tunnel policy ID; empty = default profile
+		"CF_POLICY_ID": "",
+		// M365 instance (Worldwide, China, USGovDoD, USGovGCCHigh)
+		"M365_INSTANCE": "Worldwide",
+		// Comma-separated service areas, or "all" for no API-level filter
+		"M365_SERVICES": "all",
+		// Comma-separated categories to include
+		"M365_CATEGORIES": "Optimize,Allow",
+		// Whether to include IPv6 addresses
+		"INCLUDE_IPV6": "true",
+		// Whether to include URL/host entries
+		"INCLUDE_URLS": "true",
+		// Tag prefix for managed entries
+		"MANAGED_TAG": "[m365-auto]",
+		// If true, compute changes but do not apply them
+		"DRY_RUN": "false",
+		// Maximum number of entries per split tunnel list
+		"MAX_ENTRIES": "1000"
+	}
 }

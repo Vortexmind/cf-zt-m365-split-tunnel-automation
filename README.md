@@ -2,16 +2,18 @@
 
 A Cloudflare Worker that automatically syncs Microsoft 365 IP and FQDN endpoints into a Cloudflare Zero Trust device profile's Split Tunnel EXCLUDE list, keeping the list current as Microsoft publishes endpoint changes.
 
-## Why not the built-in feature?
+## What this Worker provides
 
-Cloudflare Zero Trust offers a "Directly route Microsoft 365 traffic" toggle in the dashboard (under Zero Trust > Settings > WARP Client > Device settings > Split Tunnels). This Worker exists because the built-in feature has several limitations:
+This Worker gives you control over how Microsoft 365 endpoints are managed in your Cloudflare Zero Trust split tunnel configuration. It supports:
 
-- **Custom profile support.** The built-in toggle only applies to the default device profile. This Worker targets any profile via the `CF_POLICY_ID` environment variable, including custom profiles used by specific user groups or device types.
-- **Entry preservation.** The built-in feature does not preserve manually-added entries when it updates. This Worker uses tag-based reconciliation to keep non-M365 entries intact while replacing only the entries it manages.
-- **Fine-grained filtering.** The built-in feature does not allow filtering by Microsoft service area (Exchange, SharePoint, Skype) or category (Optimize, Allow, Default). This Worker provides `M365_SERVICES` and `M365_CATEGORIES` to include only the endpoints relevant to your organization.
-- **FQDN and wildcard support.** The built-in feature only includes IP addresses. This Worker includes both IPs and domain entries with wildcard support (e.g., `*.sharepoint.com`), giving you more precise split tunnel control.
-- **Observability.** The built-in feature has no logging, status endpoint, or error tracking. This Worker exposes `/status`, `/preview`, structured logging, and last-error tracking in KV.
-- **On-demand sync.** The built-in feature cannot be triggered manually. This Worker provides `POST /sync` for immediate updates outside the cron schedule.
+- **Custom profile targeting.** Select any device profile via the `CF_POLICY_ID` environment variable, including custom profiles used by specific user groups or device types.
+- **Entry preservation.** Uses tag-based reconciliation to keep manually-added or third-party entries intact while replacing only the entries it manages.
+- **Fine-grained filtering.** Include only the endpoints relevant to your organization by filtering Microsoft service area (Exchange, SharePoint, Skype) or category (Optimize, Allow, Default) via `M365_SERVICES` and `M365_CATEGORIES`.
+- **FQDN and wildcard support.** Includes both IP addresses and domain entries with wildcard support (e.g., `*.sharepoint.com`) for more precise split tunnel control.
+- **Observability.** Exposes `/status`, `/preview`, structured logging, and last-error tracking in KV for visibility into sync operations.
+- **On-demand sync.** Supports daily cron scheduling plus immediate updates outside the schedule via `POST /sync`.
+
+> **Alternative approach:** Microsoft recommends an alternative where M365 traffic is sent through the tunnel but [inspection is bypassed](https://developers.cloudflare.com/cloudflare-one/traffic-policies/application-app-types/#microsoft-365-integration), rather than excluding it from the tunnel entirely.
 
 ## How it works
 
@@ -42,30 +44,20 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
    ```bash
    npx wrangler kv namespace create STATE
    ```
-   Copy the `id` from the output.
+   Copy the `id` from the output and update the `kv_namespaces` entry in `wrangler.jsonc`.
 
-4. Create the preview namespace for local development:
+4. Generate TypeScript types from your Wrangler config:
    ```bash
-   npx wrangler kv namespace create STATE --preview
+   npm run cf-typegen
    ```
-   Copy the `preview_id` from the output.
+   Re-run this command whenever you change `wrangler.jsonc`.
 
-5. Update `wrangler.jsonc`: replace `TODO_REPLACE_WITH_KV_NAMESPACE_ID` with the actual namespace `id`, and `TODO_REPLACE_WITH_KV_PREVIEW_ID` with the actual `preview_id`.
-
-6. Copy `.dev.vars.example` to `.dev.vars` and fill in the secrets:
+5. Copy `.dev.vars.example` to `.dev.vars` and replace the placeholder values with your own:
    ```bash
    cp .dev.vars.example .dev.vars
    ```
 
-7. Set secrets for production:
-   ```bash
-   npx wrangler secret put CF_API_TOKEN
-   npx wrangler secret put WEBHOOK_SECRET
-   ```
-
-8. Configure vars in `wrangler.jsonc` (or override via `.dev.vars` for local dev). At minimum, set `CF_ACCOUNT_ID` to your Cloudflare account ID.
-
-9. Test locally:
+6. Test locally:
    ```bash
    npm run dev
    ```
@@ -74,19 +66,29 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
    curl http://localhost:8787/healthz
    ```
 
-10. Preview the diff (requires auth):
-    ```bash
-    curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/preview
-    ```
+7. Preview the diff (requires auth):
+   ```bash
+   curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/preview
+   ```
 
-11. First deploy with `DRY_RUN` set to `"true"` in `wrangler.jsonc` vars to validate without writing changes.
+8. Set production secrets:
+   ```bash
+   npx wrangler secret put CF_API_TOKEN
+   npx wrangler secret put WEBHOOK_SECRET
+   ```
 
-12. Deploy:
+9. Set production variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`:
+   ```bash
+   npx wrangler deploy --keep-vars --var CF_ACCOUNT_ID:your_account_id --var CF_POLICY_ID:your_policy_id
+   ```
+   The `--keep-vars` flag ensures that dashboard-set variables are not overwritten on subsequent deploys. The `npm run deploy` script includes `--keep-vars` by default.
+
+10. First deploy with `DRY_RUN` set to `"true"` (via dashboard or `--var DRY_RUN:true`) to validate without writing changes:
     ```bash
     npm run deploy
     ```
 
-13. After validating logs and confirming the diff looks correct, set `DRY_RUN` to `"false"` in `wrangler.jsonc` and redeploy:
+11. After validating logs and confirming the diff looks correct, set `DRY_RUN` to `"false"` (via dashboard or `--var DRY_RUN:false`) and redeploy:
     ```bash
     npm run deploy
     ```
@@ -166,18 +168,24 @@ The Worker uses a tag-based approach to distinguish between entries it owns and 
 
 ## Error Handling
 
+All errors are persisted to KV with a typed reason (`rate_limit`, `permission_denied`, `cf_api`, `fetch_endpoints`, `version_check`, `cf_unknown`, `max_entries_exceeded`) and surfaced in the `/status` endpoint. The error is cleared on the next successful sync.
+
 | Error type | Behavior |
 |------------|----------|
-| M365 429 (rate limit) | Skip this run entirely. No state is mutated in KV. The next cron cycle will retry naturally. |
-| Cloudflare API 403 (permission denied) | Permanent error. The error is saved to KV and surfaced in the `/status` endpoint. Requires manual intervention (check API token permissions). |
-| Cloudflare API 5xx | Single retry with a 1-second delay. If the retry also fails, the sync is aborted and the error is logged. No state is mutated. |
-| Other errors | Logged with details. No state is mutated. The next cron cycle retries naturally. |
+| M365 429 (rate limit) | Skip this run entirely. Error is saved to KV. The next cron cycle will retry naturally. |
+| Cloudflare API 403 (permission denied) | Permanent error. Saved to KV. Requires manual intervention (check API token permissions). |
+| Cloudflare API 5xx | Single retry with a 1-second delay. If the retry also fails, the sync is aborted and the error is saved to KV. |
+| Request timeout | External API calls (Cloudflare API: 30s, M365 API: 60s) abort on timeout. The error is saved to KV. |
+| Other errors | Saved to KV with details. The next cron cycle retries naturally. |
 
 ## Development
 
 ```bash
 # Start local dev server (includes scheduled handler support)
 npm run dev
+
+# Type-check without emitting
+npm run typecheck
 
 # Run tests
 npm test
@@ -188,7 +196,7 @@ npm run test:watch
 # Deploy to production
 npm run deploy
 
-# Regenerate TypeScript types for Cloudflare bindings
+# Regenerate TypeScript types (run after any wrangler.jsonc change)
 npm run cf-typegen
 ```
 
@@ -202,11 +210,11 @@ curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"
 
 ## Production Rollout Recommendations
 
-1. Deploy first with `DRY_RUN` set to `"true"` in `wrangler.jsonc`. This computes all changes without writing them to the Cloudflare API.
+1. Deploy first with `DRY_RUN` set to `"true"` (via dashboard or `--var`). This computes all changes without writing them to the Cloudflare API.
 2. Wait for one cron cycle to run, or trigger `POST /sync` manually.
 3. Check Worker logs and the `/status` endpoint for the sync result.
 4. Verify the diff using `/preview` to confirm the entries that would be added and removed.
-5. Once satisfied, set `DRY_RUN` to `"false"` in `wrangler.jsonc` and redeploy.
+5. Once satisfied, set `DRY_RUN` to `"false"` (via dashboard or `--var`) and redeploy.
 6. Monitor Worker logs for the first few days to confirm syncs are succeeding and the split tunnel list remains correct.
 
 ## Future Enhancements

@@ -7,16 +7,10 @@ import { getAllExcludeEntries, putExcludeEntries, PermissionError, CfApiError } 
 import { reconcile } from "../reconcile";
 
 export interface SyncOptions {
-  /** If true, skip version check and always fetch endpoints */
   force?: boolean;
-  /** If true, do not PUT the result (overrides config.dryRun) */
   dryRun?: boolean;
 }
 
-/**
- * Execute the M365-to-CF split tunnel sync.
- * This is the main business logic, shared by cron and HTTP handlers.
- */
 export async function executeSync(
   kv: KVNamespace,
   config: Config,
@@ -24,6 +18,12 @@ export async function executeSync(
 ): Promise<SyncResult> {
   const force = options?.force ?? false;
   const isDryRun = options?.dryRun ?? config.dryRun;
+
+  const persistError = async (type: string, message: string) => {
+    await saveState(kv, {
+      lastError: { type, message, timestamp: new Date().toISOString() },
+    });
+  };
 
   let state: SyncState;
   try {
@@ -33,13 +33,11 @@ export async function executeSync(
     return buildErrorResult("Failed to load state", isDryRun);
   }
 
-  // Generate clientRequestId if not present
   if (!state.clientRequestId) {
     state.clientRequestId = generateClientRequestId();
     await saveState(kv, { clientRequestId: state.clientRequestId });
   }
 
-  // Version check (skip early return when forced, but still fetch version)
   let latestVersion: string | undefined;
   try {
     latestVersion = await fetchLatestVersion(config.m365Instance, state.clientRequestId);
@@ -64,17 +62,17 @@ export async function executeSync(
   } catch (err) {
     if (err instanceof RateLimitError) {
       console.log(JSON.stringify({ event: "sync.error", step: "versionCheck", error: err.message }));
+      await persistError("rate_limit", err.message);
       return buildErrorResult(err.message, isDryRun);
     }
-    // Non-rate-limit version check error: if not forced, abort; if forced, continue without version
     if (!force) {
       console.log(JSON.stringify({ event: "sync.error", step: "versionCheck", error: String(err) }));
+      await persistError("version_check", String(err));
       return buildErrorResult(`Version check failed: ${String(err)}`, isDryRun);
     }
     console.log(JSON.stringify({ event: "sync.start", force: true, versionCheckError: String(err) }));
   }
 
-  // Fetch M365 endpoints
   let endpointSets;
   try {
     endpointSets = await fetchEndpoints(
@@ -86,13 +84,14 @@ export async function executeSync(
   } catch (err) {
     if (err instanceof RateLimitError) {
       console.log(JSON.stringify({ event: "sync.error", step: "fetchEndpoints", error: err.message }));
+      await persistError("rate_limit", err.message);
       return buildErrorResult(err.message, isDryRun);
     }
     console.log(JSON.stringify({ event: "sync.error", step: "fetchEndpoints", error: String(err) }));
+    await persistError("fetch_endpoints", String(err));
     return buildErrorResult(`Fetch endpoints failed: ${String(err)}`, isDryRun);
   }
 
-  // Transform to candidates
   const candidates = transformEndpoints(endpointSets, {
     services: config.m365Services,
     categories: config.m365Categories,
@@ -102,26 +101,24 @@ export async function executeSync(
   });
   console.log(JSON.stringify({ event: "sync.transform", candidateCount: candidates.length }));
 
-  // Get current CF exclude list
   let currentEntries;
   try {
     currentEntries = await getAllExcludeEntries(config.accountId, config.policyId, config.apiToken);
   } catch (err) {
     if (err instanceof PermissionError) {
-      await saveState(kv, {
-        lastError: { type: "permission_denied", message: err.message, timestamp: new Date().toISOString() },
-      });
+      await persistError("permission_denied", err.message);
       return buildErrorResult(err.message, isDryRun);
     }
     if (err instanceof CfApiError) {
       console.log(JSON.stringify({ event: "sync.error", step: "getAllExcludeEntries", error: err.message }));
+      await persistError("cf_api", err.message);
       return buildErrorResult(err.message, isDryRun);
     }
     console.log(JSON.stringify({ event: "sync.error", step: "getAllExcludeEntries", error: String(err) }));
+    await persistError("cf_unknown", String(err));
     return buildErrorResult(`Get exclude entries failed: ${String(err)}`, isDryRun);
   }
 
-  // Reconcile
   const reconcileResult = reconcile(currentEntries, candidates, config.managedTag);
   console.log(JSON.stringify({
     event: "sync.reconcile",
@@ -132,40 +129,41 @@ export async function executeSync(
     managedAfter: reconcileResult.managedAfter.length,
   }));
 
-  // Check entry count
   if (reconcileResult.merged.length > config.maxEntries) {
     console.log(JSON.stringify({
       event: "sync.warning",
-      message: "Entry count exceeds maxEntries",
+      message: "Entry count exceeds maxEntries, aborting sync",
       total: reconcileResult.merged.length,
       maxEntries: config.maxEntries,
     }));
+    await persistError("max_entries_exceeded", `Merged list (${reconcileResult.merged.length}) exceeds maxEntries (${config.maxEntries})`);
+    return buildErrorResult(
+      `Merged list (${reconcileResult.merged.length}) exceeds maxEntries (${config.maxEntries}). Sync aborted.`,
+      isDryRun
+    );
   }
 
-  // PUT if not dry run and has changes
   if (!isDryRun && reconcileResult.hasChanges) {
     try {
       await putExcludeEntries(config.accountId, config.policyId, config.apiToken, reconcileResult.merged);
     } catch (err) {
       if (err instanceof PermissionError) {
-        await saveState(kv, {
-          lastError: { type: "permission_denied", message: err.message, timestamp: new Date().toISOString() },
-        });
+        await persistError("permission_denied", err.message);
         return buildErrorResult(err.message, isDryRun);
       }
       if (err instanceof CfApiError) {
         console.log(JSON.stringify({ event: "sync.error", step: "putExcludeEntries", error: err.message }));
+        await persistError("cf_api", err.message);
         return buildErrorResult(err.message, isDryRun);
       }
       console.log(JSON.stringify({ event: "sync.error", step: "putExcludeEntries", error: String(err) }));
+      await persistError("cf_unknown", String(err));
       return buildErrorResult(`PUT exclude entries failed: ${String(err)}`, isDryRun);
     }
   }
 
-  // Use the version from the check, falling back to last known version
   const newVersion = latestVersion ?? state.lastVersion;
 
-  // Build SyncResult
   const result: SyncResult = {
     version: newVersion,
     services: config.m365Services ?? ["all"],
@@ -180,12 +178,15 @@ export async function executeSync(
     timestamp: new Date().toISOString(),
   };
 
-  // Save state
-  await saveState(kv, {
-    lastVersion: newVersion,
-    lastSyncedAt: result.timestamp,
+  const stateUpdates: Partial<SyncState> = {
     lastResultSummary: result,
-  });
+  };
+  if (!isDryRun) {
+    stateUpdates.lastVersion = newVersion;
+    stateUpdates.lastSyncedAt = result.timestamp;
+    stateUpdates.lastError = undefined;
+  }
+  await saveState(kv, stateUpdates);
 
   console.log(JSON.stringify({ event: "sync.complete", result }));
   return result;

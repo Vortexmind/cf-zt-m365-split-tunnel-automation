@@ -1,27 +1,11 @@
 import type { CategoryPriority } from "./types";
 
-export interface Env {
-  STATE: KVNamespace;
-  CF_ACCOUNT_ID: string;
-  CF_POLICY_ID: string;
-  CF_API_TOKEN: string; // secret
-  M365_INSTANCE: string;
-  M365_SERVICES: string;
-  M365_CATEGORIES: string;
-  INCLUDE_IPV6: string;
-  INCLUDE_URLS: string;
-  MANAGED_TAG: string;
-  DRY_RUN: string;
-  MAX_ENTRIES: string;
-  WEBHOOK_SECRET: string; // secret - for HTTP auth
-}
-
 export interface Config {
   accountId: string;
   policyId: string;
   apiToken: string;
   m365Instance: string;
-  m365Services: string[] | undefined; // undefined = all
+  m365Services: string[] | undefined;
   m365Categories: CategoryPriority[];
   includeIpv6: boolean;
   includeUrls: boolean;
@@ -29,9 +13,8 @@ export interface Config {
   dryRun: boolean;
   maxEntries: number;
   webhookSecret: string;
-  // Derived
-  useDefaultProfile: boolean; // true if policyId is empty
-  m365NoIpv6: boolean; // inverted for API param
+  useDefaultProfile: boolean;
+  m365NoIpv6: boolean;
 }
 
 const VALID_CATEGORIES: readonly CategoryPriority[] = [
@@ -51,26 +34,25 @@ function parseInteger(value: string | undefined, defaultValue: number): number {
   if (Number.isNaN(parsed)) {
     throw new Error(`Invalid integer value: "${value}"`);
   }
+  if (parsed <= 0) {
+    throw new Error(`Integer value must be positive: "${value}"`);
+  }
   return parsed;
 }
 
 export function parseConfig(env: Env): Config {
-  // Required fields
   if (!env.CF_ACCOUNT_ID) {
     throw new Error("CF_ACCOUNT_ID is required but not set");
   }
 
-  // Parse M365 services
   let m365Services: string[] | undefined;
   if (env.M365_SERVICES && env.M365_SERVICES.toLowerCase() !== "all") {
     m365Services = env.M365_SERVICES.split(",").map((s) => s.trim());
   }
-  // Always ensure "Common" is included in the effective services list
   if (m365Services && !m365Services.includes("Common")) {
     m365Services = ["Common", ...m365Services];
   }
 
-  // Parse and validate categories
   const categoryInput = env.M365_CATEGORIES || "Optimize,Allow";
   const m365Categories = categoryInput
     .split(",")
@@ -86,6 +68,10 @@ export function parseConfig(env: Env): Config {
   const includeIpv6 = parseBoolean(env.INCLUDE_IPV6, true);
   const policyId = env.CF_POLICY_ID ?? "";
 
+  if (!env.WEBHOOK_SECRET) {
+    console.warn("WEBHOOK_SECRET is not set. HTTP routes (/sync, /preview, /status) will return 401.");
+  }
+
   return {
     accountId: env.CF_ACCOUNT_ID,
     policyId,
@@ -99,7 +85,6 @@ export function parseConfig(env: Env): Config {
     dryRun: parseBoolean(env.DRY_RUN, false),
     maxEntries: parseInteger(env.MAX_ENTRIES, 1000),
     webhookSecret: env.WEBHOOK_SECRET,
-    // Derived
     useDefaultProfile: policyId === "",
     m365NoIpv6: !includeIpv6,
   };

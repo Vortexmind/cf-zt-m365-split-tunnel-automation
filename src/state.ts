@@ -8,10 +8,15 @@ const KV_KEYS = {
   LAST_ERROR: "m365:lastError",
 } as const;
 
-/**
- * Load the current sync state from KV.
- * Returns default state if no prior state exists.
- */
+function safeParseJson<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function loadState(kv: KVNamespace): Promise<SyncState> {
   const [clientRequestId, lastVersion, lastSyncedAt, lastResultSummaryRaw, lastErrorRaw] =
     await Promise.all([
@@ -22,15 +27,8 @@ export async function loadState(kv: KVNamespace): Promise<SyncState> {
       kv.get(KV_KEYS.LAST_ERROR),
     ]);
 
-  let lastResultSummary: SyncResult | undefined;
-  if (lastResultSummaryRaw) {
-    lastResultSummary = JSON.parse(lastResultSummaryRaw) as SyncResult;
-  }
-
-  let lastError: SyncState["lastError"];
-  if (lastErrorRaw) {
-    lastError = JSON.parse(lastErrorRaw) as SyncState["lastError"];
-  }
+  const lastResultSummary = safeParseJson<SyncResult | undefined>(lastResultSummaryRaw, undefined);
+  const lastError = safeParseJson<SyncState["lastError"]>(lastErrorRaw, undefined);
 
   return {
     clientRequestId: clientRequestId ?? "",
@@ -41,45 +39,41 @@ export async function loadState(kv: KVNamespace): Promise<SyncState> {
   };
 }
 
-/**
- * Save the sync state to KV.
- * Only updates the provided fields; other fields are preserved.
- */
 export async function saveState(
   kv: KVNamespace,
   updates: Partial<SyncState>
 ): Promise<void> {
-  const writes: Promise<void>[] = [];
+  const ops: Promise<void>[] = [];
 
   if (updates.clientRequestId !== undefined) {
-    writes.push(kv.put(KV_KEYS.CLIENT_REQUEST_ID, updates.clientRequestId));
+    ops.push(kv.put(KV_KEYS.CLIENT_REQUEST_ID, updates.clientRequestId));
   }
 
   if (updates.lastVersion !== undefined) {
-    writes.push(kv.put(KV_KEYS.LAST_VERSION, updates.lastVersion));
+    ops.push(kv.put(KV_KEYS.LAST_VERSION, updates.lastVersion));
   }
 
   if (updates.lastSyncedAt !== undefined) {
-    writes.push(kv.put(KV_KEYS.LAST_SYNCED_AT, updates.lastSyncedAt));
+    ops.push(kv.put(KV_KEYS.LAST_SYNCED_AT, updates.lastSyncedAt));
   }
 
   if (updates.lastResultSummary !== undefined) {
-    writes.push(
+    ops.push(
       kv.put(KV_KEYS.LAST_RESULT_SUMMARY, JSON.stringify(updates.lastResultSummary))
     );
   }
 
-  if (updates.lastError !== undefined) {
-    writes.push(kv.put(KV_KEYS.LAST_ERROR, JSON.stringify(updates.lastError)));
+  if ("lastError" in updates) {
+    if (updates.lastError === undefined) {
+      ops.push(kv.delete(KV_KEYS.LAST_ERROR));
+    } else {
+      ops.push(kv.put(KV_KEYS.LAST_ERROR, JSON.stringify(updates.lastError)));
+    }
   }
 
-  await Promise.all(writes);
+  await Promise.all(ops);
 }
 
-/**
- * Generate a new clientRequestId (UUID v4) for first-run.
- * Uses crypto.randomUUID() available in Workers runtime.
- */
 export function generateClientRequestId(): string {
   return crypto.randomUUID();
 }

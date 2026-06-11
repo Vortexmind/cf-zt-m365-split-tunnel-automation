@@ -1,10 +1,8 @@
 import { M365EndpointSet } from "../types";
+import { fetchWithTimeout, TimeoutError } from "../fetch";
 
-/**
- * Error thrown when the M365 endpoints API returns HTTP 429.
- * The endpoints web method is rate-limited; callers should wait
- * at least 1 hour before retrying.
- */
+const M365_API_TIMEOUT_MS = 60_000;
+
 export class RateLimitError extends Error {
   constructor() {
     super("M365 API rate limit exceeded. Retry after 1 hour.");
@@ -12,16 +10,12 @@ export class RateLimitError extends Error {
   }
 }
 
-/**
- * Check the latest version of M365 endpoints.
- * Uses the version web method (not rate-limited per Microsoft docs).
- */
 export async function fetchLatestVersion(
   instance: string,
   clientRequestId: string
 ): Promise<string> {
   const url = `https://endpoints.office.com/version/${instance}?clientRequestId=${clientRequestId}`;
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, M365_API_TIMEOUT_MS);
 
   if (!response.ok) {
     const body = await response.text();
@@ -30,14 +24,13 @@ export async function fetchLatestVersion(
     );
   }
 
-  const data = (await response.json()) as { latest: string };
-  return data.latest;
+  const data = await response.json();
+  if (Array.isArray(data)) {
+    return data[0].latest;
+  }
+  return (data as { instance: string; latest: string }).latest;
 }
 
-/**
- * Fetch M365 endpoint sets.
- * Uses the endpoints web method (rate-limited; 429 if called too frequently).
- */
 export async function fetchEndpoints(
   instance: string,
   clientRequestId: string,
@@ -60,7 +53,7 @@ export async function fetchEndpoints(
     url += `&NoIPv6=true`;
   }
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, M365_API_TIMEOUT_MS);
 
   if (response.status === 429) {
     throw new RateLimitError();
@@ -75,3 +68,5 @@ export async function fetchEndpoints(
 
   return (await response.json()) as M365EndpointSet[];
 }
+
+export { TimeoutError as M365TimeoutError };

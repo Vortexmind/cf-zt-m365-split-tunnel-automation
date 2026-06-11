@@ -1,11 +1,10 @@
 import { SplitTunnelEntry, CfApiListResponse } from "../types";
+import { fetchWithTimeout, TimeoutError } from "../fetch";
 
 const BASE_URL = "https://api.cloudflare.com/client/v4";
+const CF_API_TIMEOUT_MS = 30_000;
+const MAX_PAGES = 100;
 
-/**
- * Build the exclude API path based on whether we're targeting
- * the default profile or a custom profile.
- */
 function buildExcludePath(accountId: string, policyId: string): string {
   if (policyId === "") {
     return `/accounts/${accountId}/devices/policy/exclude`;
@@ -13,12 +12,21 @@ function buildExcludePath(accountId: string, policyId: string): string {
   return `/accounts/${accountId}/devices/policy/${policyId}/exclude`;
 }
 
-/**
- * Get ALL exclude entries for a device settings profile.
- * Handles pagination automatically by looping through all pages.
- * This is critical: a partial GET followed by a full PUT would
- * delete entries not visible on the first page.
- */
+async function cfGet(
+  url: string,
+  apiToken: string
+): Promise<Response> {
+  const headers = { Authorization: `Bearer ${apiToken}` };
+  let response = await fetchWithTimeout(url, { method: "GET", headers }, CF_API_TIMEOUT_MS);
+
+  if (response.status >= 500) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    response = await fetchWithTimeout(url, { method: "GET", headers }, CF_API_TIMEOUT_MS);
+  }
+
+  return response;
+}
+
 export async function getAllExcludeEntries(
   accountId: string,
   policyId: string,
@@ -31,12 +39,7 @@ export async function getAllExcludeEntries(
 
   while (hasMore) {
     const url = `${BASE_URL}${path}?page=${page}&per_page=100`;
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-      },
-    });
+    const response = await cfGet(url, apiToken);
 
     if (response.status === 403) {
       throw new PermissionError(
@@ -46,14 +49,24 @@ export async function getAllExcludeEntries(
 
     if (!response.ok) {
       const body = await response.text();
-      throw new CfApiError(
-        response.status,
-        `CF API returned ${response.status}: ${body}`
-      );
+      throw new CfApiError(response.status, `CF API returned ${response.status}: ${body}`);
     }
 
     const data: CfApiListResponse<SplitTunnelEntry> = await response.json();
     allResults.push(...data.result);
+
+    if (data.result.length === 0) {
+      break;
+    }
+
+    if (page >= MAX_PAGES) {
+      console.warn(JSON.stringify({
+        event: "cf.pagination.limit",
+        message: `Reached page limit (${MAX_PAGES}), some entries may be missing`,
+        entriesSoFar: allResults.length,
+      }));
+      break;
+    }
 
     const totalCount = data.result_info?.total_count;
     if (totalCount !== undefined && allResults.length < totalCount) {
@@ -66,10 +79,6 @@ export async function getAllExcludeEntries(
   return allResults;
 }
 
-/**
- * Replace the entire exclude list for a device settings profile.
- * This is a full replacement (PUT), not an incremental update.
- */
 export async function putExcludeEntries(
   accountId: string,
   policyId: string,
@@ -79,23 +88,28 @@ export async function putExcludeEntries(
   const path = buildExcludePath(accountId, policyId);
   const url = `${BASE_URL}${path}`;
 
-  const doPut = async (): Promise<Response> => {
-    return fetch(url, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(entries),
-    });
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiToken}`,
+    "Content-Type": "application/json",
   };
 
-  let response = await doPut();
+  let response = await fetchWithTimeout(
+    url,
+    {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(entries),
+    },
+    CF_API_TIMEOUT_MS
+  );
 
-  // Single retry on 5xx with 1-second delay
   if (response.status >= 500) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    response = await doPut();
+    response = await fetchWithTimeout(
+      url,
+      { method: "PUT", headers, body: JSON.stringify(entries) },
+      CF_API_TIMEOUT_MS
+    );
   }
 
   if (response.status === 403) {
@@ -106,18 +120,12 @@ export async function putExcludeEntries(
 
   if (response.status >= 500) {
     const body = await response.text();
-    throw new CfApiError(
-      response.status,
-      `CF API returned ${response.status}: ${body}`
-    );
+    throw new CfApiError(response.status, `CF API returned ${response.status}: ${body}`);
   }
 
   if (!response.ok) {
     const body = await response.text();
-    throw new CfApiError(
-      response.status,
-      `CF API returned ${response.status}: ${body}`
-    );
+    throw new CfApiError(response.status, `CF API returned ${response.status}: ${body}`);
   }
 
   const data: CfApiListResponse<SplitTunnelEntry> = await response.json();
@@ -140,3 +148,5 @@ export class CfApiError extends Error {
     this.name = "CfApiError";
   }
 }
+
+export { TimeoutError as CfTimeoutError };

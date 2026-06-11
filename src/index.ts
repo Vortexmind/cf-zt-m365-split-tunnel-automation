@@ -1,4 +1,4 @@
-import { Env, parseConfig } from "./config";
+import { parseConfig } from "./config";
 import { validateAuth } from "./auth";
 import { executeSync } from "./handlers/sync";
 import { executePreview } from "./handlers/preview";
@@ -17,6 +17,7 @@ export default {
     try {
       config = parseConfig(env);
     } catch (err) {
+      console.error(JSON.stringify({ event: "http.error", step: "parseConfig", error: String(err) }));
       return jsonResponse({ error: `Configuration error: ${String(err)}` }, 500);
     }
 
@@ -24,12 +25,10 @@ export default {
     const path = url.pathname;
 
     try {
-      // Health check: no auth required
       if (request.method === "GET" && path === "/healthz") {
         return new Response("ok", { status: 200 });
       }
 
-      // All other routes require auth
       if (!validateAuth(request, config)) {
         return jsonResponse({ error: "Unauthorized" }, 401);
       }
@@ -58,6 +57,7 @@ export default {
 
       return jsonResponse({ error: "Not found" }, 404);
     } catch (err) {
+      console.error(JSON.stringify({ event: "http.error", path, error: String(err) }));
       return jsonResponse({ error: "Internal server error" }, 500);
     }
   },
@@ -67,19 +67,19 @@ export default {
     try {
       config = parseConfig(env);
     } catch (err) {
-      console.error("Scheduled sync failed: configuration error", String(err));
+      console.error(JSON.stringify({ event: "scheduled.error", step: "parseConfig", error: String(err) }));
       return;
     }
 
     try {
       const result = await executeSync(env.STATE, config);
       if (result.error) {
-        console.error("Scheduled sync completed with error:", result.error);
+        console.error(JSON.stringify({ event: "scheduled.error", error: result.error }));
       } else {
-        console.log("Scheduled sync completed:", JSON.stringify(result));
+        console.log(JSON.stringify({ event: "scheduled.complete", result }));
       }
     } catch (err) {
-      console.error("Scheduled sync failed with unhandled error:", String(err));
+      console.error(JSON.stringify({ event: "scheduled.error", step: "executeSync", error: String(err) }));
     }
   },
 } satisfies ExportedHandler<Env>;

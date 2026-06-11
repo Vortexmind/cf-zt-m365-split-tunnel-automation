@@ -1,23 +1,23 @@
 # Cloudflare API credentials
-# CF_API_TOKEN=          # Cloudflare API token with Zero Trust edit permissions (secret)
-# CF_ACCOUNT_ID=         # Cloudflare account ID (required)
+CF_API_TOKEN=your_cloudflare_api_token_here
+CF_ACCOUNT_ID=your_cloudflare_account_id_here
 
 # Optional Cloudflare config
-# CF_POLICY_ID=          # Split tunnel policy ID; empty = default profile
+CF_POLICY_ID=
 
 # M365 endpoint configuration
-# M365_INSTANCE=Worldwide  # M365 instance: Worldwide, China, USGovDoD, USGovGCCHigh
-# M365_SERVICES=all        # Comma-separated service areas, or "all"
-# M365_CATEGORIES=Optimize,Allow  # Comma-separated categories to include
+M365_INSTANCE=Worldwide
+M365_SERVICES=all
+M365_CATEGORIES=Optimize,Allow
 
 # Feature flags
-# INCLUDE_IPV6=true        # Include IPv6 addresses in split tunnel entries
-# INCLUDE_URLS=true        # Include URL/host entries in split tunnel entries
+INCLUDE_IPV6=true
+INCLUDE_URLS=true
 
 # Operational settings
-# MANAGED_TAG=[m365-auto]  # Tag prefix for managed entries
-# DRY_RUN=false            # Compute changes but do not apply them
-# MAX_ENTRIES=1000         # Maximum entries per split tunnel list
+MANAGED_TAG=[m365-auto]
+DRY_RUN=true
+MAX_ENTRIES=1000
 
 # HTTP trigger authentication
-# WEBHOOK_SECRET=          # Secret for authenticating HTTP trigger requests (secret)
+WEBHOOK_SECRET=your_webhook_secret_here
