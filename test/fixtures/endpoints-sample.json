@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1,
+    "serviceArea": "Exchange",
+    "serviceAreaDisplayName": "Exchange Online",
+    "urls": ["*.protection.outlook.com", "outlook.office.com"],
+    "ips": ["192.0.2.0/24", "2001:db8::/32"],
+    "tcpPorts": "443",
+    "category": "Optimize",
+    "expressRoute": true,
+    "required": true
+  },
+  {
+    "id": 2,
+    "serviceArea": "Exchange",
+    "serviceAreaDisplayName": "Exchange Online",
+    "urls": ["*.office365.us", "outlook.office365.us"],
+    "ips": ["198.51.100.0/24"],
+    "tcpPorts": "443",
+    "category": "Allow",
+    "expressRoute": true,
+    "required": true
+  },
+  {
+    "id": 3,
+    "serviceArea": "SharePoint",
+    "serviceAreaDisplayName": "SharePoint Online and OneDrive for Business",
+    "urls": ["*.sharepoint.com"],
+    "ips": ["203.0.113.0/24"],
+    "tcpPorts": "443",
+    "category": "Optimize",
+    "expressRoute": true,
+    "required": true
+  },
+  {
+    "id": 4,
+    "serviceArea": "Common",
+    "serviceAreaDisplayName": "Microsoft 365 Common and Office Online",
+    "urls": ["*.office.net", "officecdn.microsoft.com"],
+    "ips": ["192.0.2.0/24"],
+    "tcpPorts": "443",
+    "category": "Allow",
+    "expressRoute": false,
+    "required": true
+  },
+  {
+    "id": 5,
+    "serviceArea": "Skype",
+    "serviceAreaDisplayName": "Skype for Business Online and Microsoft Teams",
+    "urls": ["*.teams.microsoft.com"],
+    "ips": ["198.51.100.0/24", "2001:db8::/32"],
+    "tcpPorts": "443",
+    "udpPorts": "3478",
+    "category": "Default",
+    "expressRoute": true,
+    "required": false
+  },
+  {
+    "id": 6,
+    "serviceArea": "SharePoint",
+    "serviceAreaDisplayName": "SharePoint Online and OneDrive for Business",
+    "urls": ["*.onedrive.com", "onedrive.live.com"],
+    "tcpPorts": "443",
+    "category": "Allow",
+    "expressRoute": false,
+    "required": true
+  }
+]
