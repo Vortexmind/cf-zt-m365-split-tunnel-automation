@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { LayerCard, Text, Badge, Banner, Button } from "@cloudflare/kumo";
-import { ArrowsClockwise } from "@phosphor-icons/react";
+import { LayerCard, Text, Badge, Banner, Button, Tooltip } from "@cloudflare/kumo";
+import { ArrowsClockwise, Info } from "@phosphor-icons/react";
 import { fetchStatus } from "../lib/api";
 import type { SyncState } from "../lib/types";
 
@@ -14,6 +14,22 @@ function formatDate(iso: string | undefined): string {
   } catch {
     return iso;
   }
+}
+
+function FieldRow({ label, tooltip, children }: { label: string; tooltip?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-1.5">
+      <div className="flex items-center gap-1 shrink-0">
+        <Text variant="secondary">{label}</Text>
+        {tooltip && (
+          <Tooltip content={tooltip} render={<span className="inline-flex cursor-default text-kumo-subtle" />}>
+            <Info size={13} />
+          </Tooltip>
+        )}
+      </div>
+      <div className="text-right min-w-0">{children}</div>
+    </div>
+  );
 }
 
 export function ActivityCard() {
@@ -39,37 +55,46 @@ export function ActivityCard() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <LayerCard>
-      <Text variant="heading3" as="h2" DANGEROUS_style={{ color: "#f97316", marginBottom: "0.875rem" }}>Activity</Text>
+    <LayerCard className="p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-1.5">
+          <Text variant="heading3" as="h2" DANGEROUS_style={{ color: "#f97316" }}>Activity</Text>
+          <Tooltip content="Automatically refreshes every 60 seconds. Shows the result of the last completed sync run." render={<span className="inline-flex cursor-default text-kumo-subtle" />}>
+            <Info size={14} />
+          </Tooltip>
+        </div>
+        <Button variant="secondary" icon={ArrowsClockwise} onClick={load} disabled={loading}>
+          Refresh
+        </Button>
+      </div>
       {loading && !data && <Text variant="secondary">Loading...</Text>}
       {error && <Banner variant="error" description={error} />}
       {data && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "0.375rem 0", fontSize: "0.875rem" }}>
-            <Text variant="secondary">Last Synced</Text>
-            <Text>{formatDate(data.lastSyncedAt)}</Text>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "0.375rem 0", fontSize: "0.875rem" }}>
-            <Text variant="secondary">M365 Version</Text>
-            <Text>{data.lastVersion || "-"}</Text>
-          </div>
+        <div className="divide-y divide-kumo-hairline">
+          <FieldRow label="Last Synced" tooltip="Date and time of the last successful sync to Cloudflare">
+            <Text variant="secondary">{formatDate(data.lastSyncedAt)}</Text>
+          </FieldRow>
+          <FieldRow label="M365 Version" tooltip="Microsoft's version identifier for the published endpoint dataset">
+            <Text variant="mono">{data.lastVersion || "-"}</Text>
+          </FieldRow>
           {data.lastResultSummary && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "0.375rem 0", fontSize: "0.875rem" }}>
-                <Text variant="secondary">Candidates</Text>
+              <FieldRow label="Candidates" tooltip="Number of M365 endpoints that matched your configured filters">
                 <Text>{data.lastResultSummary.candidates}</Text>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "0.375rem 0", fontSize: "0.875rem" }}>
-                <Text variant="secondary">Added</Text>
-                <Text DANGEROUS_style={{ color: "#6ee7b7" }}>{data.lastResultSummary.added}</Text>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "0.375rem 0", fontSize: "0.875rem" }}>
-                <Text variant="secondary">Removed</Text>
-                <Text DANGEROUS_style={{ color: "#f87171" }}>{data.lastResultSummary.removed}</Text>
-              </div>
+              </FieldRow>
+              <FieldRow label="Entries Added" tooltip="New entries added to the split tunnel list in the last sync">
+                <Text DANGEROUS_style={data.lastResultSummary.added > 0 ? { color: "#6ee7b7" } : {}}>
+                  {data.lastResultSummary.added}
+                </Text>
+              </FieldRow>
+              <FieldRow label="Entries Removed" tooltip="Entries removed from the split tunnel list in the last sync">
+                <Text DANGEROUS_style={data.lastResultSummary.removed > 0 ? { color: "#f87171" } : {}}>
+                  {data.lastResultSummary.removed}
+                </Text>
+              </FieldRow>
               {data.lastResultSummary.dryRun && (
-                <div style={{ marginTop: "0.5rem" }}>
-                  <Badge variant="info">Dry Run</Badge>
+                <div className="pt-2">
+                  <Badge variant="info">Dry Run — no changes applied</Badge>
                 </div>
               )}
             </>
@@ -77,18 +102,13 @@ export function ActivityCard() {
           {data.lastError && (
             <Banner
               variant="error"
-              title={data.lastError.type || "Error"}
+              title={data.lastError.type || "Sync Error"}
               description={data.lastError.message}
               className="mt-3"
             />
           )}
-        </>
+        </div>
       )}
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-        <Button variant="secondary" icon={ArrowsClockwise} onClick={load} disabled={loading}>
-          Refresh
-        </Button>
-      </div>
     </LayerCard>
   );
 }

@@ -60,7 +60,7 @@ function Dashboard() {
         <CloudflareLogo variant="glyph" color="color" className="w-12 h-12 mx-auto mb-2" />
         <Text variant="heading2" as="h1" DANGEROUS_style={{ color: "#f97316" }}>M365 Split Tunnel Automation</Text>
         <div style={{ marginTop: "0.25rem" }}>
-          <Text variant="secondary">Cloudflare Zero Trust split tunnel EXCLUDE list sync</Text>
+          <Text variant="secondary">Automated sync of Microsoft 365 endpoints to your Zero Trust split tunnel exclude list</Text>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem", maxWidth: "960px", margin: "0 auto" }}>
