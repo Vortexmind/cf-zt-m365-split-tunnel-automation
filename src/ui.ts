@@ -32,45 +32,6 @@ export const UI_HTML = `<!DOCTYPE html>
       margin-top: 0.25rem;
     }
 
-    /* Login */
-    #login-view {
-      max-width: 400px;
-      margin: 4rem auto;
-    }
-
-    #login-view h2 {
-      text-align: center;
-      margin-bottom: 1rem;
-      font-size: 1.25rem;
-    }
-
-    .login-form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .login-form input {
-      padding: 0.625rem 0.875rem;
-      border: 1px solid #334155;
-      border-radius: 0.5rem;
-      background: #0f172a;
-      color: #e2e8f0;
-      font-size: 0.9375rem;
-      outline: none;
-    }
-
-    .login-form input:focus {
-      border-color: #f97316;
-    }
-
-    .login-error {
-      color: #f87171;
-      font-size: 0.8125rem;
-      text-align: center;
-      min-height: 1.25rem;
-    }
-
     /* Dashboard grid */
     #dashboard-view { display: none; }
 
@@ -272,28 +233,26 @@ export const UI_HTML = `<!DOCTYPE html>
       font-size: 0.8125rem;
       color: #fde047;
     }
+
+    .session-banner {
+      background: #7f1d1d;
+      border: 1px solid #991b1b;
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      color: #fca5a5;
+      text-align: center;
+      max-width: 960px;
+      margin-left: auto;
+      margin-right: auto;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>M365 Split Tunnel Automation</h1>
     <p>Cloudflare Zero Trust split tunnel EXCLUDE list sync</p>
-  </div>
-
-  <!-- Login View -->
-  <div id="login-view">
-    <h2>Authenticate</h2>
-    <form class="login-form" id="login-form">
-      <input
-        type="password"
-        id="login-token"
-        placeholder="Webhook secret"
-        autocomplete="off"
-        required
-      />
-      <button type="submit" class="btn btn--primary" style="width:100%">Sign In</button>
-      <div class="login-error" id="login-error"></div>
-    </form>
   </div>
 
   <!-- Dashboard View -->
@@ -349,34 +308,30 @@ export const UI_HTML = `<!DOCTYPE html>
 
   <script>
     (function() {
-      var TOKEN_KEY = "cfzt_token";
       var refreshTimer = null;
 
-      // --- Helpers ---
-      function getToken() {
-        return sessionStorage.getItem(TOKEN_KEY);
-      }
-
-      function setToken(val) {
-        sessionStorage.setItem(TOKEN_KEY, val);
-      }
-
-      function clearToken() {
-        sessionStorage.removeItem(TOKEN_KEY);
-      }
-
-      function authHeaders() {
-        return { "Authorization": "Bearer " + getToken() };
+      function getAccessCookie() {
+        if (typeof document === "undefined") return null;
+        var value = "; " + document.cookie;
+        var parts = value.split("; CF_Authorization=");
+        if (parts.length === 2) {
+          var raw = parts.pop().split(";").shift() || null;
+          try { return raw ? decodeURIComponent(raw) : null; } catch (e) { return raw; }
+        }
+        return null;
       }
 
       function apiFetch(path, options) {
         var opts = options || {};
-        var headers = Object.assign({}, authHeaders(), opts.headers || {});
+        var token = getAccessCookie();
+        var headers = Object.assign({}, opts.headers || {});
+        if (token) {
+          headers["CF-Access-JWT-Assertion"] = token;
+        }
         return fetch(path, Object.assign({}, opts, { headers: headers }))
           .then(function(res) {
             if (res.status === 401) {
-              clearToken();
-              showLogin();
+              showSessionExpired();
               throw new Error("Unauthorized");
             }
             return res;
@@ -402,41 +357,27 @@ export const UI_HTML = `<!DOCTYPE html>
         return div.innerHTML;
       }
 
-      // --- View switching ---
-      function showLogin() {
-        document.getElementById("login-view").style.display = "";
-        document.getElementById("dashboard-view").style.display = "none";
+      function showSessionExpired() {
+        var existing = document.getElementById("session-banner");
+        if (!existing) {
+          var banner = document.createElement("div");
+          banner.id = "session-banner";
+          banner.className = "session-banner";
+          banner.textContent = "Session expired. Please reload the page to re-authenticate.";
+          var header = document.querySelector(".header");
+          if (header && header.parentNode) {
+            header.parentNode.insertBefore(banner, header);
+          }
+        }
         stopAutoRefresh();
       }
 
       function showDashboard() {
-        document.getElementById("login-view").style.display = "none";
         document.getElementById("dashboard-view").style.display = "block";
         loadStatus();
         loadSchedule();
         startAutoRefresh();
       }
-
-      // --- Login ---
-      document.getElementById("login-form").addEventListener("submit", function(e) {
-        e.preventDefault();
-        var input = document.getElementById("login-token");
-        var errEl = document.getElementById("login-error");
-        var token = input.value.trim();
-        if (!token) return;
-        errEl.textContent = "";
-        setToken(token);
-        // Validate by fetching status
-        apiFetch("/api/status")
-          .then(function(res) {
-            if (!res.ok) throw new Error("Invalid credentials");
-            showDashboard();
-          })
-          .catch(function(err) {
-            clearToken();
-            errEl.textContent = err.message === "Unauthorized" ? "Invalid credentials" : err.message;
-          });
-      });
 
       // --- Activity card ---
       function loadStatus() {
@@ -735,12 +676,7 @@ export const UI_HTML = `<!DOCTYPE html>
         }
       }
 
-      // --- Init ---
-      if (getToken()) {
-        showDashboard();
-      } else {
-        showLogin();
-      }
+      showDashboard();
     })();
   </script>
 </body>

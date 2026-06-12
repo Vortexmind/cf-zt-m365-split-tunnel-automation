@@ -5,6 +5,11 @@ CF_ACCOUNT_ID=your_cloudflare_account_id_here
 # Optional Cloudflare config
 CF_POLICY_ID=
 
+# Cloudflare Access authentication
+# Set both to "dev" to bypass auth in local development
+ACCESS_TEAM_DOMAIN=dev
+ACCESS_POLICY_AUD=dev
+
 # M365 endpoint configuration
 M365_INSTANCE=Worldwide
 M365_SERVICES=all
@@ -18,6 +23,3 @@ INCLUDE_URLS=true
 MANAGED_TAG=[m365-auto]
 DRY_RUN=true
 MAX_ENTRIES=1000
-
-# HTTP trigger authentication
-WEBHOOK_SECRET=your_webhook_secret_here

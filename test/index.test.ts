@@ -1,7 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import worker from "../src/index";
-
-const WEBHOOK_SECRET = "test-secret-value-1234";
 
 function createMockKv(stored: Record<string, string> = {}) {
   const store = { ...stored };
@@ -16,13 +14,14 @@ function createMockKv(stored: Record<string, string> = {}) {
   } as unknown as KVNamespace;
 }
 
-function createEnv(kvOverrides: Record<string, string> = {}) {
+function createEnv(kvOverrides: Record<string, string> = {}, envOverrides: Partial<Env> = {}) {
   return {
     STATE: createMockKv(kvOverrides),
     CF_ACCOUNT_ID: "test-account-id",
     CF_API_TOKEN: "test-api-token",
     CF_POLICY_ID: "",
-    WEBHOOK_SECRET,
+    ACCESS_TEAM_DOMAIN: "dev",
+    ACCESS_POLICY_AUD: "dev",
     M365_INSTANCE: "Worldwide",
     M365_SERVICES: "all",
     M365_CATEGORIES: "Optimize,Allow",
@@ -33,52 +32,13 @@ function createEnv(kvOverrides: Record<string, string> = {}) {
     MAX_ENTRIES: "1000",
     CRON_EXPRESSION: "17 6 * * *",
     CRON_DESCRIPTION: "Daily at 06:17 UTC",
+    ...envOverrides,
   } as Env;
 }
 
 function makeRequest(path: string, options: RequestInit = {}): Request {
   return new Request(new URL(path, "http://localhost"), options);
 }
-
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${WEBHOOK_SECRET}` };
-}
-
-// Polyfill crypto.subtle.timingSafeEqual for Node.js test environment.
-// The Workers runtime provides this but Node.js does not.
-const originalSubtle = crypto.subtle;
-
-beforeEach(() => {
-  const nodeSubtle = crypto.subtle;
-  Object.defineProperty(crypto, "subtle", {
-    value: {
-      ...nodeSubtle,
-      timingSafeEqual(
-        a: ArrayBuffer | ArrayBufferView,
-        b: ArrayBuffer | ArrayBufferView
-      ): boolean {
-        const aBytes = a instanceof ArrayBuffer ? new Uint8Array(a) : new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
-        const bBytes = b instanceof ArrayBuffer ? new Uint8Array(b) : new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
-        if (aBytes.length !== bBytes.length) return false;
-        let result = 0;
-        for (let i = 0; i < aBytes.length; i++) {
-          result |= aBytes[i] ^ bBytes[i];
-        }
-        return result === 0;
-      },
-    },
-    writable: true,
-    configurable: true,
-  });
-});
-
-afterEach(() => {
-  Object.defineProperty(crypto, "subtle", {
-    value: originalSubtle,
-    writable: true,
-    configurable: true,
-  });
-});
 
 describe("fetch handler - auth enforcement", () => {
   it("GET /healthz returns 200 without auth", async () => {
@@ -100,20 +60,29 @@ describe("fetch handler - auth enforcement", () => {
     expect(res.status).toBe(404);
   });
 
-  it("GET /api/status returns 401 without auth", async () => {
-    const env = createEnv();
+  it("GET /api/status returns 401 when ACCESS_POLICY_AUD is not 'dev' and no token is present", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(makeRequest("/api/status"), env);
     expect(res.status).toBe(401);
   });
 
   it("GET /api/preview returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(makeRequest("/api/preview"), env);
     expect(res.status).toBe(401);
   });
 
   it("POST /api/sync returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(
       makeRequest("/api/sync", { method: "POST" }),
       env
@@ -122,13 +91,19 @@ describe("fetch handler - auth enforcement", () => {
   });
 
   it("GET /api/schedule returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(makeRequest("/api/schedule"), env);
     expect(res.status).toBe(401);
   });
 
   it("POST /api/schedule returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(
       makeRequest("/api/schedule", { method: "POST" }),
       env
@@ -137,7 +112,10 @@ describe("fetch handler - auth enforcement", () => {
   });
 
   it("DELETE /api/managed returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(
       makeRequest("/api/managed", { method: "DELETE" }),
       env
@@ -146,8 +124,51 @@ describe("fetch handler - auth enforcement", () => {
   });
 
   it("GET /api/entries returns 401 without auth", async () => {
-    const env = createEnv();
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
     const res = await worker.fetch!(makeRequest("/api/entries"), env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 500 when ACCESS_TEAM_DOMAIN and ACCESS_POLICY_AUD are missing", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "",
+      ACCESS_POLICY_AUD: "",
+    });
+    const res = await worker.fetch!(makeRequest("/api/status"), env);
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toBe("Server configuration error");
+  });
+
+  it("dev sentinel bypasses auth for /api/status", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(makeRequest("/api/status"), env);
+    expect(res.status).toBe(200);
+  });
+
+  it("dev sentinel does not bypass auth when only ACCESS_POLICY_AUD is dev", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "dev",
+    });
+    const res = await worker.fetch!(makeRequest("/api/status"), env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 with an invalid JWT token", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(
+      makeRequest("/api/status", {
+        headers: { "cf-access-jwt-assertion": "invalid.jwt.token" },
+      }),
+      env
+    );
     expect(res.status).toBe(401);
   });
 });
@@ -164,7 +185,7 @@ describe("fetch handler - routes with auth", () => {
   it("GET /api/schedule returns cron, description, and paused state", async () => {
     const env = createEnv();
     const res = await worker.fetch!(
-      makeRequest("/api/schedule", { headers: authHeaders() }),
+      makeRequest("/api/schedule"),
       env
     );
     expect(res.status).toBe(200);
@@ -181,10 +202,7 @@ describe("fetch handler - routes with auth", () => {
     const res = await worker.fetch!(
       makeRequest("/api/schedule", {
         method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paused: true }),
       }),
       env
@@ -196,7 +214,6 @@ describe("fetch handler - routes with auth", () => {
       description: "Daily at 06:17 UTC",
       paused: true,
     });
-    // Verify KV was called to persist the paused state
     expect(env.STATE.put).toHaveBeenCalledWith("m365:paused", "true");
   });
 
@@ -205,10 +222,7 @@ describe("fetch handler - routes with auth", () => {
     const res = await worker.fetch!(
       makeRequest("/api/schedule", {
         method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paused: false }),
       }),
       env
@@ -220,7 +234,6 @@ describe("fetch handler - routes with auth", () => {
       description: "Daily at 06:17 UTC",
       paused: false,
     });
-    // Verify KV was called to delete the paused key
     expect(env.STATE.delete).toHaveBeenCalledWith("m365:paused");
   });
 
@@ -229,10 +242,7 @@ describe("fetch handler - routes with auth", () => {
     const res = await worker.fetch!(
       makeRequest("/api/schedule", {
         method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       }),
       env
@@ -247,10 +257,7 @@ describe("fetch handler - routes with auth", () => {
     const res = await worker.fetch!(
       makeRequest("/api/schedule", {
         method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ other: true }),
       }),
       env
@@ -263,7 +270,7 @@ describe("fetch handler - routes with auth", () => {
   it("GET /unknown returns 404", async () => {
     const env = createEnv();
     const res = await worker.fetch!(
-      makeRequest("/unknown", { headers: authHeaders() }),
+      makeRequest("/unknown"),
       env
     );
     expect(res.status).toBe(404);
@@ -276,7 +283,7 @@ describe("fetch handler - routes with auth", () => {
       "m365:lastSyncedAt": "2026-01-01T00:00:00Z",
     });
     const res = await worker.fetch!(
-      makeRequest("/api/status", { headers: authHeaders() }),
+      makeRequest("/api/status"),
       env
     );
     expect(res.status).toBe(200);
@@ -318,8 +325,6 @@ describe("scheduled handler", () => {
       noRetry() {},
     } as ScheduledController;
 
-    // The sync will fail because there is no real API to call,
-    // but it should NOT log the "scheduled.skipped" message.
     await worker.scheduled!(controller, env);
 
     const skipCall = logSpy.mock.calls.find(

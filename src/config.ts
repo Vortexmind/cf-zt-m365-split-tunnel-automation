@@ -12,7 +12,6 @@ export interface Config {
   managedTag: string;
   dryRun: boolean;
   maxEntries: number;
-  webhookSecret: string;
   useDefaultProfile: boolean;
   m365NoIpv6: boolean;
 }
@@ -68,10 +67,6 @@ export function parseConfig(env: Env): Config {
   const includeIpv6 = parseBoolean(env.INCLUDE_IPV6, true);
   const policyId = env.CF_POLICY_ID ?? "";
 
-  if (!env.WEBHOOK_SECRET) {
-    console.warn("WEBHOOK_SECRET is not set. HTTP routes (/api/sync, /api/preview, /api/status, /api/schedule) will return 401.");
-  }
-
   return {
     accountId: env.CF_ACCOUNT_ID,
     policyId,
@@ -84,7 +79,6 @@ export function parseConfig(env: Env): Config {
     managedTag: env.MANAGED_TAG || "[m365-auto]",
     dryRun: parseBoolean(env.DRY_RUN, false),
     maxEntries: parseInteger(env.MAX_ENTRIES, 1000),
-    webhookSecret: env.WEBHOOK_SECRET,
     useDefaultProfile: policyId === "",
     m365NoIpv6: !includeIpv6,
   };

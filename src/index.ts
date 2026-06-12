@@ -1,5 +1,5 @@
 import { parseConfig } from "./config";
-import { validateAuth } from "./auth";
+import { validateAccessAuth } from "./auth";
 import { executeSync } from "./handlers/sync";
 import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
@@ -43,17 +43,18 @@ export default {
       return new Response(null, { status: 404 });
     }
 
-    // Authenticated routes (require config and auth)
+    // Authenticated routes (require auth and config)
+    const authResult = await validateAccessAuth(request, env);
+    if (!authResult.authenticated) {
+      return authResult.response;
+    }
+
     let config;
     try {
       config = parseConfig(env);
     } catch (err) {
       console.error(JSON.stringify({ event: "http.error", step: "parseConfig", error: String(err) }));
       return jsonResponse({ error: `Configuration error: ${String(err)}` }, 500);
-    }
-
-    if (!validateAuth(request, config)) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
     try {

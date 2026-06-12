@@ -42,6 +42,10 @@
 		// Cron expression for the scheduled trigger (informational; also in triggers.crons)
 		"CRON_EXPRESSION": "17 6 * * *",
 		// Human-readable description of the cron schedule
-		"CRON_DESCRIPTION": "Daily at 06:17 UTC"
+		"CRON_DESCRIPTION": "Daily at 06:17 UTC",
+		// Cloudflare Access team domain (e.g. https://your-team.cloudflareaccess.com)
+		"ACCESS_TEAM_DOMAIN": "",
+		// Cloudflare Access application AUD tag
+		"ACCESS_POLICY_AUD": ""
 	}
 }

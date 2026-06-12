@@ -67,29 +67,33 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
    curl http://localhost:8787/healthz
    ```
 
-7. Preview the diff (requires auth):
-    ```bash
-    curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/preview
-    ```
+7. Preview the diff (auth bypassed in local dev with `ACCESS_POLICY_AUD=dev`):
+     ```bash
+     curl http://localhost:8787/api/preview
+     ```
 
 8. Set production secrets:
-   ```bash
-   npx wrangler secret put CF_API_TOKEN
-   npx wrangler secret put WEBHOOK_SECRET
-   ```
+    ```bash
+    npx wrangler secret put CF_API_TOKEN
+    ```
 
-9. Set production variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`:
-   ```bash
-   npx wrangler deploy --keep-vars --var CF_ACCOUNT_ID:your_account_id --var CF_POLICY_ID:your_policy_id
-   ```
-   The `--keep-vars` flag ensures that dashboard-set variables are not overwritten on subsequent deploys. The `npm run deploy` script includes `--keep-vars` by default.
+9. Configure Cloudflare Access:
+    - Create a Self-hosted Access application for the Worker's hostname
+    - Note the Application AUD tag
+    - Set `ACCESS_TEAM_DOMAIN` and `ACCESS_POLICY_AUD` via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`
 
-10. First deploy with `DRY_RUN` set to `"true"` (via dashboard or `--var DRY_RUN:true`) to validate without writing changes:
+10. Set production variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`:
+    ```bash
+    npx wrangler deploy --keep-vars --var CF_ACCOUNT_ID:your_account_id --var CF_POLICY_ID:your_policy_id
+    ```
+    The `--keep-vars` flag ensures that dashboard-set variables are not overwritten on subsequent deploys. The `npm run deploy` script includes `--keep-vars` by default.
+
+11. First deploy with `DRY_RUN` set to `"true"` (via dashboard or `--var DRY_RUN:true`) to validate without writing changes:
     ```bash
     npm run deploy
     ```
 
-11. After validating logs and confirming the diff looks correct, set `DRY_RUN` to `"false"` (via dashboard or `--var DRY_RUN:false`) and redeploy:
+12. After validating logs and confirming the diff looks correct, set `DRY_RUN` to `"false"` (via dashboard or `--var DRY_RUN:false`) and redeploy:
     ```bash
     npm run deploy
     ```
@@ -109,7 +113,8 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | `DRY_RUN` | `false` | No | When `true`, compute changes but do not apply them to the Cloudflare API |
 | `MAX_ENTRIES` | `1000` | No | Maximum number of entries per split tunnel list. Sync is aborted if the merged list would exceed this limit |
 | `CF_API_TOKEN` | (none) | Yes (secret) | Cloudflare API token with Zero Trust edit permissions |
-| `WEBHOOK_SECRET` | (none) | Required for HTTP routes (secret) | Secret for authenticating HTTP trigger requests |
+| `ACCESS_TEAM_DOMAIN` | (none) | Yes | Cloudflare Access team domain URL (e.g. `https://your-team.cloudflareaccess.com`) |
+| `ACCESS_POLICY_AUD` | (none) | Yes | Cloudflare Access application AUD tag. Set to `dev` to bypass auth in local development |
 | `CRON_EXPRESSION` | `17 6 * * *` | No | Cron expression displayed in the dashboard. Must match the `triggers.crons` value in `wrangler.jsonc` |
 | `CRON_DESCRIPTION` | `Daily at 06:17 UTC` | No | Human-readable description of the schedule, displayed in the dashboard |
 
@@ -127,7 +132,23 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
 | POST | `/api/schedule` | Yes | Update the schedule pause state |
 
-All authenticated endpoints require the `Authorization: Bearer <WEBHOOK_SECRET>` header.
+All authenticated endpoints require a valid Cloudflare Access JWT, passed via the `cf-access-jwt-assertion` header. Access sets this automatically for browser users (via the `CF_Authorization` cookie) and for API callers using service tokens (Access injects the header after validating `CF-Access-Client-Id`/`CF-Access-Client-Secret`).
+
+### Cloudflare Access Setup
+
+1. In the Cloudflare Zero Trust dashboard, create a new **Self-hosted** Access application for your Worker's hostname (e.g. `your-worker.your-account.workers.dev`).
+2. Note the **Application AUD** tag from the application settings.
+3. Set the `ACCESS_TEAM_DOMAIN` environment variable to your team domain (e.g. `https://your-team.cloudflareaccess.com`).
+4. Set the `ACCESS_POLICY_AUD` environment variable to the AUD tag from step 2.
+5. Create an Access policy that allows the appropriate users or groups.
+
+For API access from automated systems, create a **Service Token** in Zero Trust > Access > Service Auth > Service Tokens, then add a **Service Auth** policy to the same Access application that accepts that token. When calling the API, include the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. Access validates these at the edge and injects the JWT header before forwarding to the Worker.
+
+> **Important:** Attach the Service Auth policy to the *existing* Access application, not a separate one. Creating a separate application for the same hostname can cause conflicts.
+
+### Local Development
+
+For local development, set both `ACCESS_TEAM_DOMAIN` and `ACCESS_POLICY_AUD` to `dev` in your `.dev.vars` file. This bypasses JWT verification entirely. **Never use the `dev` sentinel in production.**
 
 ### Examples
 
@@ -135,41 +156,56 @@ All authenticated endpoints require the `Authorization: Bearer <WEBHOOK_SECRET>`
 # Health check (no auth)
 curl http://localhost:8787/healthz
 
-# Check last sync status
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/status
+# Check last sync status (using Access service token)
+curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+     -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+     http://localhost:8787/api/status
 
 # Preview the diff without applying changes
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/preview
+curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+     -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+     http://localhost:8787/api/preview
 
 # Trigger an immediate sync
-curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/sync
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+             -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+             http://localhost:8787/api/sync
 
 # Force sync, skipping version check
-curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"force": true}' \
-  http://localhost:8787/api/sync
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+             -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+             -H "Content-Type: application/json" \
+             -d '{"force": true}' \
+             http://localhost:8787/api/sync
 
 # Check schedule state
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/schedule
+curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+     -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+     http://localhost:8787/api/schedule
 
 # Pause the scheduled sync
-curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"paused": true}' \
-  http://localhost:8787/api/schedule
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+             -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+             -H "Content-Type: application/json" \
+             -d '{"paused": true}' \
+             http://localhost:8787/api/schedule
 
 # Resume the scheduled sync
-curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"paused": false}' \
-  http://localhost:8787/api/schedule
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+             -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+             -H "Content-Type: application/json" \
+             -d '{"paused": false}' \
+             http://localhost:8787/api/schedule
 
 # Remove all M365-managed entries (preserved entries are kept)
-curl -X DELETE -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/managed
+curl -X DELETE -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+               -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+               http://localhost:8787/api/managed
 
 # Fetch the current split tunnel exclude list
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/entries
+curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+     -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+     http://localhost:8787/api/entries
 ```
 
 ### POST /api/sync body
@@ -216,7 +252,7 @@ The optional JSON body supports:
 
 ## Web Dashboard
 
-The dashboard is served at `GET /` and provides a visual interface for the Worker. It requires the same Bearer token (webhook secret) to access API data; the token is entered via a login form and stored in the browser's sessionStorage.
+The dashboard is served at `GET /` and provides a visual interface for the Worker. It is protected by Cloudflare Access; when a user navigates to the dashboard, Access presents a login page and sets a `CF_Authorization` cookie on success. The dashboard reads this cookie and passes it as the `CF-Access-JWT-Assertion` header on API calls.
 
 The dashboard has three cards:
 
@@ -224,8 +260,6 @@ The dashboard has three cards:
 - **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Force Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
-
-> **Note:** The dashboard will eventually be protected by Cloudflare Access; currently it uses Bearer token auth.
 
 ## Cron Schedule
 

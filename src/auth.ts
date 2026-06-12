@@ -1,53 +1,71 @@
-import { Config } from "./config";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 
-/**
- * Workers-runtime SubtleCrypto extension that includes timingSafeEqual.
- * The method exists at runtime but the built-in TypeScript lib types
- * do not include it, so we declare the extension here.
- */
-interface WorkersSubtleCrypto extends SubtleCrypto {
-  timingSafeEqual(
-    a: ArrayBuffer | ArrayBufferView,
-    b: ArrayBuffer | ArrayBufferView
-  ): boolean;
+export interface AccessAuthEnv {
+  ACCESS_TEAM_DOMAIN: string;
+  ACCESS_POLICY_AUD: string;
 }
 
-/**
- * Validate the Authorization header against the configured webhook secret.
- * Uses constant-time comparison to prevent timing attacks.
- * Returns true if valid, false otherwise.
- *
- * Note: if the token and secret have different lengths, this returns false
- * immediately rather than padding to equal length. The secret length is a
- * config value, not truly secret, so the length leak is acceptable and the
- * simpler approach avoids unnecessary complexity.
- */
-export function validateAuth(request: Request, config: Config): boolean {
-  const header = request.headers.get("Authorization");
-  if (!header) {
-    return false;
+const DEV_SENTINEL = "dev";
+
+let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+let cachedTeamDomain: string | null = null;
+
+function getJWKS(teamDomain: string) {
+  if (!cachedJwks || cachedTeamDomain !== teamDomain) {
+    cachedJwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
+    cachedTeamDomain = teamDomain;
+  }
+  return cachedJwks;
+}
+
+export async function validateAccessAuth(
+  request: Request,
+  env: AccessAuthEnv
+): Promise<{ authenticated: true; email?: string } | { authenticated: false; response: Response }> {
+  if (env.ACCESS_POLICY_AUD === DEV_SENTINEL && env.ACCESS_TEAM_DOMAIN === DEV_SENTINEL) {
+    console.warn("AUTH BYPASS ACTIVE: ACCESS_POLICY_AUD and ACCESS_TEAM_DOMAIN are set to 'dev'. Do not use in production.");
+    return { authenticated: true };
   }
 
-  const prefix = "Bearer ";
-  if (!header.startsWith(prefix)) {
-    return false;
+  if (!env.ACCESS_POLICY_AUD || !env.ACCESS_TEAM_DOMAIN) {
+    console.error("Missing ACCESS_POLICY_AUD or ACCESS_TEAM_DOMAIN");
+    return {
+      authenticated: false,
+      response: new Response(JSON.stringify({ error: "Server configuration error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    };
   }
 
-  const token = header.slice(prefix.length);
-  if (token.length === 0) {
-    return false;
+  const token = request.headers.get("cf-access-jwt-assertion");
+  if (!token) {
+    return {
+      authenticated: false,
+      response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    };
   }
 
-  const secret = config.webhookSecret;
-  if (token.length !== secret.length) {
-    // Length mismatch: return early. The secret length is not sensitive
-    // (it is a config value), so this does not leak useful information.
-    return false;
+  try {
+    const teamDomain = env.ACCESS_TEAM_DOMAIN.replace(/\/+$/, "");
+    const JWKS = getJWKS(teamDomain);
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: teamDomain,
+      audience: env.ACCESS_POLICY_AUD,
+    });
+    return { authenticated: true, email: payload.email as string | undefined };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error(`Access JWT validation failed: ${message}`);
+    return {
+      authenticated: false,
+      response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    };
   }
-
-  const tokenBytes = new TextEncoder().encode(token);
-  const secretBytes = new TextEncoder().encode(secret);
-
-  const subtle = crypto.subtle as WorkersSubtleCrypto;
-  return subtle.timingSafeEqual(tokenBytes, secretBytes);
 }
