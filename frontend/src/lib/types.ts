@@ -74,3 +74,8 @@ export interface PreviewResult {
 export interface ConfigStatus {
   accessConfigured: boolean;
 }
+
+export interface ServicesConfig {
+  /** null means "all services" (no filter applied); string[] is the explicit selection */
+  services: string[] | null;
+}

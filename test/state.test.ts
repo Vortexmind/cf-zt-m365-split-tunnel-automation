@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { loadPaused, savePaused } from "../src/state";
+import { loadPaused, savePaused, loadServices, saveServices } from "../src/state";
 
 function createMockKv(stored: Record<string, string> = {}) {
   const store = { ...stored };
@@ -45,5 +45,49 @@ describe("savePaused", () => {
     const kv = createMockKv();
     await savePaused(kv, false);
     expect(kv.delete).toHaveBeenCalledWith("m365:paused");
+  });
+});
+
+describe("loadServices / saveServices", () => {
+  it("returns undefined when KV key is absent", async () => {
+    const kv = createMockKv({});
+    const result = await loadServices(kv);
+    expect(result).toBeUndefined();
+  });
+
+  it("returns null when KV value is the string 'null' (user chose all services)", async () => {
+    const kv = createMockKv({ "m365:services": "null" });
+    const result = await loadServices(kv);
+    expect(result).toBeNull();
+  });
+
+  it("returns parsed array when KV contains a JSON array", async () => {
+    const kv = createMockKv({ "m365:services": JSON.stringify(["Exchange", "SharePoint"]) });
+    const result = await loadServices(kv);
+    expect(result).toEqual(["Exchange", "SharePoint"]);
+  });
+
+  it("returns null (safeParseJson fallback) when KV contains corrupt JSON", async () => {
+    const kv = createMockKv({ "m365:services": "not-valid-json{" });
+    const result = await loadServices(kv);
+    expect(result).toBeNull();
+  });
+
+  it("saveServices with null stores the literal string 'null'", async () => {
+    const kv = createMockKv({});
+    await saveServices(kv, null);
+    expect(kv.put).toHaveBeenCalledWith("m365:services", "null");
+  });
+
+  it("saveServices with string array stores JSON", async () => {
+    const kv = createMockKv({});
+    await saveServices(kv, ["Skype"]);
+    expect(kv.put).toHaveBeenCalledWith("m365:services", JSON.stringify(["Skype"]));
+  });
+
+  it("saveServices with empty array stores empty JSON array", async () => {
+    const kv = createMockKv({});
+    await saveServices(kv, []);
+    expect(kv.put).toHaveBeenCalledWith("m365:services", JSON.stringify([]));
   });
 });

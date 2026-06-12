@@ -10,9 +10,9 @@ This Worker gives you control over how Microsoft 365 endpoints are managed in yo
 
 - **Custom profile targeting.** Select any device profile via the `CF_POLICY_ID` environment variable, including custom profiles used by specific user groups or device types.
 - **Entry preservation.** Uses tag-based reconciliation to keep manually-added or third-party entries intact while replacing only the entries it manages.
-- **Fine-grained filtering.** Include only the endpoints relevant to your organization by filtering Microsoft service area (Exchange, SharePoint, Skype) or category (Optimize, Allow, Default) via `M365_SERVICES` and `M365_CATEGORIES`.
+- **Fine-grained filtering.** Include only the endpoints relevant to your organization by filtering Microsoft service area (Exchange, SharePoint, Skype) or category (Optimize, Allow, Default) via `M365_CATEGORIES`. Service area filtering is configurable directly from the dashboard's Services card and persisted in KV; the `M365_SERVICES` env var serves as the fallback default.
 - **FQDN and wildcard support.** Includes both IP addresses and domain entries with wildcard support (e.g., `*.sharepoint.com`) for more precise split tunnel control.
-- **Web dashboard.** Built-in UI at `/` for monitoring sync activity, controlling the schedule, and triggering on-demand syncs.
+- **Web dashboard.** SPA dashboard for monitoring sync activity, controlling the schedule, configuring service areas, and triggering on-demand syncs. Supports light and dark mode.
 - **Observability.** Exposes `/api/status`, `/api/preview`, structured logging, and last-error tracking in KV for visibility into sync operations.
 - **On-demand sync.** Supports daily cron scheduling plus immediate updates outside the schedule via `POST /api/sync`.
 
@@ -107,7 +107,7 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | `CF_ACCOUNT_ID` | (none) | Yes | Cloudflare account ID |
 | `CF_POLICY_ID` | (empty) | No | Split tunnel policy ID. When empty, targets the default device profile |
 | `M365_INSTANCE` | `Worldwide` | No | M365 cloud instance. Options: `Worldwide`, `China`, `USGovDoD`, `USGovGCCHigh` |
-| `M365_SERVICES` | `all` | No | Comma-separated service areas to include, or `all` for no filter. Options: `Exchange`, `SharePoint`, `Skype`. The `Common` service area is always included regardless of this setting, as Common endpoints are shared dependencies required by all M365 services |
+| `M365_SERVICES` | `all` | No | Fallback default for service area filtering when no selection has been saved via the dashboard. Comma-separated service areas to include, or `all` for no filter. Options: `Exchange`, `SharePoint`, `Skype`. The `Common` service area is always included regardless of this setting, as Common endpoints are shared dependencies required by all M365 services. If a selection has been saved via the dashboard (KV key `m365:services`), that value takes priority over this env var. |
 | `M365_CATEGORIES` | `Optimize,Allow` | No | Comma-separated categories to include. Options: `Optimize`, `Allow`, `Default` |
 | `INCLUDE_IPV6` | `true` | No | Whether to include IPv6 addresses in split tunnel entries |
 | `INCLUDE_URLS` | `true` | No | Whether to include URL/host entries in split tunnel entries |
@@ -124,15 +124,17 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 
 | Method | Path | Auth Required | Description |
 |--------|------|---------------|-------------|
-| GET | `/` | No | Web dashboard (embedded HTML UI) |
 | GET | `/healthz` | No | Liveness check. Returns `200 OK` with a simple status body |
+| GET | `/api/config-status` | No | Returns `{ accessConfigured: boolean }` indicating whether Cloudflare Access is configured |
 | GET | `/api/status` | Yes | Last sync metadata, including version, timestamp, result summary, and last error |
 | GET | `/api/preview` | Yes | Dry-run diff of what would change on the next sync, without writing anything |
 | POST | `/api/sync` | Yes | Trigger an immediate sync |
 | GET | `/api/schedule` | Yes | Current schedule state: cron expression, description, and paused flag |
+| POST | `/api/schedule` | Yes | Update the schedule pause state |
+| GET | `/api/services` | Yes | Returns `{ services: string[] \| null }` — the currently persisted service area selection (`null` means all services) |
+| POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
 | DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
-| POST | `/api/schedule` | Yes | Update the schedule pause state |
 
 All authenticated endpoints require a valid Cloudflare Access JWT, passed via the `cf-access-jwt-assertion` header. Access sets this automatically for browser users (via the `CF_Authorization` cookie) and for API callers using service tokens (Access injects the header after validating `CF-Access-Client-Id`/`CF-Access-Client-Secret`).
 
@@ -254,12 +256,15 @@ The optional JSON body supports:
 
 ## Web Dashboard
 
-The dashboard is served at `GET /` and provides a visual interface for the Worker. It is protected by Cloudflare Access; when a user navigates to the dashboard, Access presents a login page and sets a `CF_Authorization` cookie on success. The dashboard reads this cookie and passes it as the `CF-Access-JWT-Assertion` header on API calls.
+The dashboard is a static single-page application (SPA) served as static assets alongside the Worker. It is protected by Cloudflare Access; when a user navigates to the dashboard, Access presents a login page and sets a `CF_Authorization` cookie on success. The dashboard reads this cookie and passes it as the `CF-Access-JWT-Assertion` header on API calls.
 
-The dashboard has three cards:
+The header includes a Sun/Moon toggle button for switching between light and dark mode. The initial mode is selected from the user's browser or system preference (`prefers-color-scheme`). The selection is persisted in `localStorage`.
+
+The dashboard has five cards:
 
 - **Activity**: Shows last sync time, M365 version, entry counts, dry-run flag, and any errors. Auto-refreshes every 60 seconds.
 - **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Force Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
+- **Services**: Toggle switches for each configurable service area (Exchange, SharePoint, Skype). The Common service area is always included and is shown as a read-only info row. Changes are saved to KV via `POST /api/services` and take effect on the next sync (scheduled or manual). See [Configuring service areas](#configuring-service-areas) below.
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
 
@@ -346,6 +351,16 @@ Use the dashboard's "Force Sync Now" button or `POST /api/sync` with `{"force": 
 ### Changing the cron schedule
 
 Edit the `triggers.crons` array in `wrangler.jsonc` and update `CRON_EXPRESSION` and `CRON_DESCRIPTION` env vars to match. Redeploy with `npm run deploy`. The dashboard reads these values at runtime.
+
+### Configuring service areas
+
+Use the **Services** card in the dashboard to select which M365 service areas (Exchange, SharePoint, Skype) are included in the split tunnel list. The Common service area is always included and cannot be deselected.
+
+The selection is saved to KV under the key `m365:services` and takes priority over the `M365_SERVICES` environment variable. If no selection has ever been saved via the dashboard, the `M365_SERVICES` env var default is used.
+
+Selecting all three services, or deselecting all (which the dashboard treats as equivalent to all), produces the same result as `M365_SERVICES=all`. When all services are deselected, the dashboard shows a notice: "No services selected — all service areas will be included."
+
+After saving a new selection, trigger a Sync Now or Force Sync, or wait for the next scheduled sync, for the change to take effect.
 
 ### Removing managed entries
 

@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
-import { LayerCard, Text, Banner, CloudflareLogo } from "@cloudflare/kumo";
+import { LayerCard, Text, Banner, CloudflareLogo, Button } from "@cloudflare/kumo";
+import { Sun, Moon } from "@phosphor-icons/react";
 import { isSessionExpired, fetchConfigStatus } from "./lib/api";
 import type { ConfigStatus } from "./lib/types";
+import { loadMode, saveMode, applyMode } from "./lib/theme";
+import type { ColorMode } from "./lib/theme";
 import { ActivityCard } from "./components/ActivityCard";
 import { ScheduleCard } from "./components/ScheduleCard";
+import { ServicesCard } from "./components/ServicesCard";
 import { PreviewCard } from "./components/PreviewCard";
 import { EntriesCard } from "./components/EntriesCard";
 import { AccessUnconfigured } from "./components/AccessUnconfigured";
@@ -38,6 +42,7 @@ export function App() {
 
 function Dashboard() {
   const [sessionExpired, setSessionExpired] = useState(isSessionExpired());
+  const [colorMode, setColorMode] = useState<ColorMode>(loadMode);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -45,6 +50,13 @@ function Dashboard() {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleToggleMode = () => {
+    const next: ColorMode = colorMode === "dark" ? "light" : "dark";
+    saveMode(next);
+    applyMode(next);
+    setColorMode(next);
+  };
 
   return (
     <div className="bg-kumo-canvas min-h-screen" style={{ color: "#e2e8f0", padding: "1.5rem" }}>
@@ -56,7 +68,17 @@ function Dashboard() {
           className="mb-4 max-w-[960px] mx-auto"
         />
       )}
-      <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+      <div style={{ textAlign: "center", marginBottom: "2rem", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, right: 0 }}>
+          <Button
+            variant="secondary"
+            icon={colorMode === "dark" ? Sun : Moon}
+            onClick={handleToggleMode}
+            aria-label={colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {colorMode === "dark" ? "Light" : "Dark"}
+          </Button>
+        </div>
         <CloudflareLogo variant="glyph" color="color" className="w-12 h-12 mx-auto mb-2" />
         <Text variant="heading2" as="h1" DANGEROUS_style={{ color: "#f97316" }}>M365 Split Tunnel Automation</Text>
         <div style={{ marginTop: "0.25rem" }}>
@@ -68,6 +90,7 @@ function Dashboard() {
           <ActivityCard />
           <ScheduleCard />
         </div>
+        <ServicesCard />
         <PreviewCard />
         <EntriesCard />
       </div>

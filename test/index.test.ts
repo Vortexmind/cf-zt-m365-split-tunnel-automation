@@ -316,6 +316,93 @@ describe("fetch handler - config-status", () => {
   });
 });
 
+describe("fetch handler - services", () => {
+  it("GET /api/services returns null when no KV value set", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(makeRequest("/api/services"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.services).toBeNull();
+  });
+
+  it("GET /api/services returns saved services from KV", async () => {
+    const env = createEnv({ "m365:services": JSON.stringify(["Exchange", "SharePoint"]) });
+    const res = await worker.fetch!(makeRequest("/api/services"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.services).toEqual(["Exchange", "SharePoint"]);
+  });
+
+  it("POST /api/services saves services and returns them", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ services: ["Exchange"] }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.services).toEqual(["Exchange"]);
+    expect(env.STATE.put).toHaveBeenCalledWith("m365:services", JSON.stringify(["Exchange"]));
+  });
+
+  it("POST /api/services with null saves all-services selection", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ services: null }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.services).toBeNull();
+    expect(env.STATE.put).toHaveBeenCalledWith("m365:services", "null");
+  });
+
+  it("POST /api/services with invalid service name returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ services: ["InvalidService"] }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(typeof body.error).toBe("string");
+  });
+
+  it("POST /api/services with missing field returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/services returns 401 without auth", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(makeRequest("/api/services"), env);
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("scheduled handler", () => {
   it("skips sync and logs when paused", async () => {
     const env = createEnv({ "m365:paused": "true" });

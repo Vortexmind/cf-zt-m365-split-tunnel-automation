@@ -7,6 +7,7 @@ const KV_KEYS = {
   LAST_RESULT_SUMMARY: "m365:lastResultSummary",
   LAST_ERROR: "m365:lastError",
   PAUSED: "m365:paused",
+  SERVICES: "m365:services",
 } as const;
 
 function safeParseJson<T>(raw: string | null, fallback: T): T {
@@ -90,4 +91,32 @@ export async function savePaused(kv: KVNamespace, paused: boolean): Promise<void
 
 export function generateClientRequestId(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Load the user-configured service areas override from KV.
+ * Returns undefined if no KV key exists (not configured — fall back to env var).
+ * Returns null if explicitly set to "all services".
+ * Returns string[] of service area names if a specific selection was saved.
+ */
+export async function loadServices(kv: KVNamespace): Promise<string[] | null | undefined> {
+  const raw = await kv.get(KV_KEYS.SERVICES);
+  if (raw === null) return undefined;   // KV key does not exist → not configured
+  if (raw === "null") return null;       // Explicitly saved as null → "all services"
+  return safeParseJson<string[] | null>(raw, null);
+}
+
+/**
+ * Save the user-configured service areas override to KV.
+ * Pass null to store "all services" selection explicitly.
+ * Pass string[] to set a specific list (e.g. ["Exchange", "SharePoint"]).
+ */
+export async function saveServices(kv: KVNamespace, services: string[] | null): Promise<void> {
+  if (services === null) {
+    // Explicitly store "null" string to distinguish "all services chosen by user"
+    // from "never configured" (missing key).
+    await kv.put(KV_KEYS.SERVICES, "null");
+  } else {
+    await kv.put(KV_KEYS.SERVICES, JSON.stringify(services));
+  }
 }

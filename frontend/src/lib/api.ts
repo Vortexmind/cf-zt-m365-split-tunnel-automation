@@ -1,4 +1,4 @@
-import type { SyncState, ScheduleState, RemoveResult, EntriesResult, PreviewResult, ConfigStatus } from "./types";
+import type { SyncState, ScheduleState, RemoveResult, EntriesResult, PreviewResult, ConfigStatus, ServicesConfig } from "./types";
 
 function getAccessCookie(): string | null {
   if (typeof document === "undefined") return null;
@@ -82,4 +82,16 @@ export function fetchPreview(): Promise<PreviewResult> {
 
 export function fetchEntries(): Promise<EntriesResult> {
   return apiFetch<EntriesResult>("/api/entries");
+}
+
+export function fetchServices(): Promise<ServicesConfig> {
+  return apiFetch<ServicesConfig>("/api/services");
+}
+
+export function updateServices(services: string[] | null): Promise<ServicesConfig> {
+  return apiFetch<ServicesConfig>("/api/services", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ services }),
+  });
 }

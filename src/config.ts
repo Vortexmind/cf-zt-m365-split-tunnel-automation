@@ -39,17 +39,34 @@ function parseInteger(value: string | undefined, defaultValue: number): number {
   return parsed;
 }
 
-export function parseConfig(env: Env): Config {
+export function parseConfig(env: Env, servicesOverride?: string[] | null): Config {
   if (!env.CF_ACCOUNT_ID) {
     throw new Error("CF_ACCOUNT_ID is required but not set");
   }
 
   let m365Services: string[] | undefined;
-  if (env.M365_SERVICES && env.M365_SERVICES.toLowerCase() !== "all") {
-    m365Services = env.M365_SERVICES.split(",").map((s) => s.trim());
-  }
-  if (m365Services && !m365Services.includes("Common")) {
-    m365Services = ["Common", ...m365Services];
+
+  if (servicesOverride !== undefined) {
+    // KV override takes priority over env var.
+    // null means "all services" (no filter).
+    if (servicesOverride !== null && servicesOverride.length > 0) {
+      m365Services = servicesOverride.filter(s => s !== "Common");
+      if (m365Services.length > 0) {
+        m365Services = ["Common", ...m365Services];
+      } else {
+        // All entries were "Common" or the list is empty — treat as "all services".
+        m365Services = undefined;
+      }
+    }
+    // If servicesOverride is null or empty array → m365Services stays undefined (all)
+  } else {
+    // No KV override: fall back to env var.
+    if (env.M365_SERVICES && env.M365_SERVICES.toLowerCase() !== "all") {
+      m365Services = env.M365_SERVICES.split(",").map((s) => s.trim());
+    }
+    if (m365Services && !m365Services.includes("Common")) {
+      m365Services = ["Common", ...m365Services];
+    }
   }
 
   const categoryInput = env.M365_CATEGORIES || "Optimize,Allow";

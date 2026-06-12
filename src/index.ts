@@ -5,7 +5,7 @@ import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { PermissionError, CfApiError } from "./cloudflare/client";
-import { loadState, loadPaused, savePaused } from "./state";
+import { loadState, loadPaused, savePaused, loadServices, saveServices } from "./state";
 import type { ScheduleState } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -17,6 +17,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 const DEFAULT_CRON = "17 6 * * *";
 const DEFAULT_CRON_DESCRIPTION = "Daily at 06:17 UTC";
+const VALID_SERVICES = ["Exchange", "SharePoint", "Skype"] as const;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -43,9 +44,12 @@ export default {
       return authResult.response;
     }
 
+    // Load KV-persisted services override (may be undefined if not set)
+    const servicesOverride = await loadServices(env.STATE);
+
     let config;
     try {
-      config = parseConfig(env);
+      config = parseConfig(env, servicesOverride);
     } catch (err) {
       console.error(JSON.stringify({ event: "http.error", step: "parseConfig", error: String(err) }));
       return jsonResponse({ error: `Configuration error: ${String(err)}` }, 500);
@@ -121,6 +125,33 @@ export default {
         }
       }
 
+      if (request.method === "GET" && path === "/api/services") {
+        return jsonResponse({ services: servicesOverride === undefined ? null : servicesOverride });
+      }
+
+      if (request.method === "POST" && path === "/api/services") {
+        let services: string[] | null | undefined;
+        try {
+          const body = await request.json() as { services?: string[] | null };
+          services = body.services;
+        } catch {
+          // Invalid JSON
+        }
+        if (services === undefined) {
+          return jsonResponse({ error: "Missing required field: services (use null for all services, or an array of service names)" }, 400);
+        }
+        // Validate service names if array provided
+        if (Array.isArray(services)) {
+          const invalid = services.filter(s => !(VALID_SERVICES as readonly string[]).includes(s));
+          if (invalid.length > 0) {
+            return jsonResponse({ error: `Invalid service names: ${invalid.join(", ")}. Valid values: ${VALID_SERVICES.join(", ")}` }, 400);
+          }
+        }
+        await saveServices(env.STATE, services);
+        console.log(JSON.stringify({ event: "services.update", services }));
+        return jsonResponse({ services });
+      }
+
       return jsonResponse({ error: "Not found" }, 404);
     } catch (err) {
       console.error(JSON.stringify({ event: "http.error", path, error: String(err) }));
@@ -135,9 +166,12 @@ export default {
       return;
     }
 
+    // Load KV-persisted services override
+    const servicesOverride = await loadServices(env.STATE);
+
     let config;
     try {
-      config = parseConfig(env);
+      config = parseConfig(env, servicesOverride);
     } catch (err) {
       console.error(JSON.stringify({ event: "scheduled.error", step: "parseConfig", error: String(err) }));
       return;

@@ -1,10 +1,11 @@
 import "./styles/main.css";
+import { applyMode, loadMode } from "./lib/theme";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { TooltipProvider } from "@cloudflare/kumo";
 import { App } from "./App";
+import { TooltipProvider } from "@cloudflare/kumo";
 
-document.documentElement.setAttribute("data-mode", "dark");
+applyMode(loadMode());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
