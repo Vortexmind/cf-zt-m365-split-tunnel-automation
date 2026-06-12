@@ -7,6 +7,7 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"workers_dev": false,
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1
@@ -20,6 +21,12 @@
 		{
 			"binding": "STATE",
 			"id": "c5af3b94eb0249519081b99a465b509a"
+		}
+	],
+	"routes": [
+		{
+			"pattern": "m365-split-tunnel.homesecurity.rocks",
+			"custom_domain": true
 		}
 	],
 	"vars": {
