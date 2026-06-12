@@ -1,5 +1,7 @@
 # M365 Split Tunnel Automation
 
+> **Disclaimer:** This code is provided as a sample/template for educational and reference purposes only. It is provided "as-is" without warranty of any kind. See the [LICENSE](LICENSE) file for details. You are responsible for reviewing, testing, and adapting this code for your own use case before deploying to production.
+
 A Cloudflare Worker that automatically syncs Microsoft 365 IP and FQDN endpoints into a Cloudflare Zero Trust device profile's Split Tunnel EXCLUDE list, keeping the list current as Microsoft publishes endpoint changes.
 
 ## What this Worker provides
