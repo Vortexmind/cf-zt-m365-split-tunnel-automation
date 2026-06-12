@@ -69,7 +69,7 @@ export function parseConfig(env: Env): Config {
   const policyId = env.CF_POLICY_ID ?? "";
 
   if (!env.WEBHOOK_SECRET) {
-    console.warn("WEBHOOK_SECRET is not set. HTTP routes (/sync, /preview, /status) will return 401.");
+    console.warn("WEBHOOK_SECRET is not set. HTTP routes (/api/sync, /api/preview, /api/status, /api/schedule) will return 401.");
   }
 
   return {

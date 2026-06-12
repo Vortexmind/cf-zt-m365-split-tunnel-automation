@@ -1,5 +1,12 @@
 import { SplitTunnelEntry, CandidateEntry } from "./types";
 
+export interface PartitionResult {
+  /** Entries not managed by this worker */
+  preserved: SplitTunnelEntry[];
+  /** Entries managed by this worker (description starts with managedTag) */
+  managed: SplitTunnelEntry[];
+}
+
 export interface ReconcileResult {
   /** Entries to keep that are not managed by this worker */
   preserved: SplitTunnelEntry[];
@@ -28,6 +35,28 @@ function entryKey(entry: SplitTunnelEntry): string {
 }
 
 /**
+ * Partition entries into preserved (not managed) and managed (description
+ * starts with managedTag) groups.
+ */
+export function partitionEntries(
+  entries: SplitTunnelEntry[],
+  managedTag: string
+): PartitionResult {
+  const preserved: SplitTunnelEntry[] = [];
+  const managed: SplitTunnelEntry[] = [];
+
+  for (const entry of entries) {
+    if (entry.description && entry.description.startsWith(managedTag)) {
+      managed.push(entry);
+    } else {
+      preserved.push(entry);
+    }
+  }
+
+  return { preserved, managed };
+}
+
+/**
  * Reconcile the current CF exclude list with new M365 candidate entries.
  * Preserves all non-managed entries verbatim.
  * Managed entries (those with description starting with managedTag) are
@@ -39,16 +68,7 @@ export function reconcile(
   managedTag: string
 ): ReconcileResult {
   // Step 1: Split current entries into preserved and managedBefore.
-  const preserved: SplitTunnelEntry[] = [];
-  const managedBefore: SplitTunnelEntry[] = [];
-
-  for (const entry of currentEntries) {
-    if (entry.description && entry.description.startsWith(managedTag)) {
-      managedBefore.push(entry);
-    } else {
-      preserved.push(entry);
-    }
-  }
+  const { preserved, managed: managedBefore } = partitionEntries(currentEntries, managedTag);
 
   // Step 2: Convert candidates to SplitTunnelEntry[].
   const managedAfter: SplitTunnelEntry[] = candidates.map((c) => {

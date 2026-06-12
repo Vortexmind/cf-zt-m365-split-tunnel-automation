@@ -23,10 +23,6 @@
 		}
 	],
 	"vars": {
-		// Cloudflare account ID (required — set via dashboard or --var)
-		"CF_ACCOUNT_ID": "",
-		// Zero Trust split tunnel policy ID; empty = default profile
-		"CF_POLICY_ID": "",
 		// M365 instance (Worldwide, China, USGovDoD, USGovGCCHigh)
 		"M365_INSTANCE": "Worldwide",
 		// Comma-separated service areas, or "all" for no API-level filter
@@ -42,6 +38,10 @@
 		// If true, compute changes but do not apply them
 		"DRY_RUN": "false",
 		// Maximum number of entries per split tunnel list
-		"MAX_ENTRIES": "1000"
+		"MAX_ENTRIES": "1000",
+		// Cron expression for the scheduled trigger (informational; also in triggers.crons)
+		"CRON_EXPRESSION": "17 6 * * *",
+		// Human-readable description of the cron schedule
+		"CRON_DESCRIPTION": "Daily at 06:17 UTC"
 	}
 }

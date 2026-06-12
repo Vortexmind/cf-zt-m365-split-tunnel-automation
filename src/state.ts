@@ -6,6 +6,7 @@ const KV_KEYS = {
   LAST_SYNCED_AT: "m365:lastSyncedAt",
   LAST_RESULT_SUMMARY: "m365:lastResultSummary",
   LAST_ERROR: "m365:lastError",
+  PAUSED: "m365:paused",
 } as const;
 
 function safeParseJson<T>(raw: string | null, fallback: T): T {
@@ -72,6 +73,19 @@ export async function saveState(
   }
 
   await Promise.all(ops);
+}
+
+export async function loadPaused(kv: KVNamespace): Promise<boolean> {
+  const value = await kv.get(KV_KEYS.PAUSED);
+  return value === "true";
+}
+
+export async function savePaused(kv: KVNamespace, paused: boolean): Promise<void> {
+  if (paused) {
+    await kv.put(KV_KEYS.PAUSED, "true");
+  } else {
+    await kv.delete(KV_KEYS.PAUSED);
+  }
 }
 
 export function generateClientRequestId(): string {

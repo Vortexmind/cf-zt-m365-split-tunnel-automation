@@ -10,8 +10,9 @@ This Worker gives you control over how Microsoft 365 endpoints are managed in yo
 - **Entry preservation.** Uses tag-based reconciliation to keep manually-added or third-party entries intact while replacing only the entries it manages.
 - **Fine-grained filtering.** Include only the endpoints relevant to your organization by filtering Microsoft service area (Exchange, SharePoint, Skype) or category (Optimize, Allow, Default) via `M365_SERVICES` and `M365_CATEGORIES`.
 - **FQDN and wildcard support.** Includes both IP addresses and domain entries with wildcard support (e.g., `*.sharepoint.com`) for more precise split tunnel control.
-- **Observability.** Exposes `/status`, `/preview`, structured logging, and last-error tracking in KV for visibility into sync operations.
-- **On-demand sync.** Supports daily cron scheduling plus immediate updates outside the schedule via `POST /sync`.
+- **Web dashboard.** Built-in UI at `/` for monitoring sync activity, controlling the schedule, and triggering on-demand syncs.
+- **Observability.** Exposes `/api/status`, `/api/preview`, structured logging, and last-error tracking in KV for visibility into sync operations.
+- **On-demand sync.** Supports daily cron scheduling plus immediate updates outside the schedule via `POST /api/sync`.
 
 > **Alternative approach:** Microsoft recommends an alternative where M365 traffic is sent through the tunnel but [inspection is bypassed](https://developers.cloudflare.com/cloudflare-one/traffic-policies/application-app-types/#microsoft-365-integration), rather than excluding it from the tunnel entirely.
 
@@ -67,9 +68,9 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
    ```
 
 7. Preview the diff (requires auth):
-   ```bash
-   curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/preview
-   ```
+    ```bash
+    curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/preview
+    ```
 
 8. Set production secrets:
    ```bash
@@ -109,15 +110,22 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | `MAX_ENTRIES` | `1000` | No | Maximum number of entries per split tunnel list. Sync is aborted if the merged list would exceed this limit |
 | `CF_API_TOKEN` | (none) | Yes (secret) | Cloudflare API token with Zero Trust edit permissions |
 | `WEBHOOK_SECRET` | (none) | Required for HTTP routes (secret) | Secret for authenticating HTTP trigger requests |
+| `CRON_EXPRESSION` | `17 6 * * *` | No | Cron expression displayed in the dashboard. Must match the `triggers.crons` value in `wrangler.jsonc` |
+| `CRON_DESCRIPTION` | `Daily at 06:17 UTC` | No | Human-readable description of the schedule, displayed in the dashboard |
 
 ## API Endpoints
 
 | Method | Path | Auth Required | Description |
 |--------|------|---------------|-------------|
+| GET | `/` | No | Web dashboard (embedded HTML UI) |
 | GET | `/healthz` | No | Liveness check. Returns `200 OK` with a simple status body |
-| GET | `/status` | Yes | Last sync metadata, including version, timestamp, result summary, and last error |
-| GET | `/preview` | Yes | Dry-run diff of what would change on the next sync, without writing anything |
-| POST | `/sync` | Yes | Force an immediate sync |
+| GET | `/api/status` | Yes | Last sync metadata, including version, timestamp, result summary, and last error |
+| GET | `/api/preview` | Yes | Dry-run diff of what would change on the next sync, without writing anything |
+| POST | `/api/sync` | Yes | Trigger an immediate sync |
+| GET | `/api/schedule` | Yes | Current schedule state: cron expression, description, and paused flag |
+| DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
+| GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
+| POST | `/api/schedule` | Yes | Update the schedule pause state |
 
 All authenticated endpoints require the `Authorization: Bearer <WEBHOOK_SECRET>` header.
 
@@ -128,28 +136,96 @@ All authenticated endpoints require the `Authorization: Bearer <WEBHOOK_SECRET>`
 curl http://localhost:8787/healthz
 
 # Check last sync status
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/status
+curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/status
 
 # Preview the diff without applying changes
-curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/preview
+curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/preview
 
-# Force an immediate sync
-curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/sync
+# Trigger an immediate sync
+curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/sync
 
 # Force sync, skipping version check
 curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"force": true}' \
-  http://localhost:8787/sync
+  http://localhost:8787/api/sync
+
+# Check schedule state
+curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/schedule
+
+# Pause the scheduled sync
+curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"paused": true}' \
+  http://localhost:8787/api/schedule
+
+# Resume the scheduled sync
+curl -X POST -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"paused": false}' \
+  http://localhost:8787/api/schedule
+
+# Remove all M365-managed entries (preserved entries are kept)
+curl -X DELETE -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/managed
+
+# Fetch the current split tunnel exclude list
+curl -H "Authorization: Bearer YOUR_WEBHOOK_SECRET" http://localhost:8787/api/entries
 ```
 
-### POST /sync body
+### POST /api/sync body
 
 The optional JSON body supports:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `force` | boolean | `false` | When `true`, skips the M365 version check and always fetches and applies the latest endpoints |
+
+### POST /api/schedule body
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `paused` | boolean | (required) | When `true`, the scheduled handler skips sync. When `false`, scheduled sync resumes |
+
+### GET /api/schedule response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cron` | string | The cron expression for the scheduled trigger (from `CRON_EXPRESSION` env var) |
+| `description` | string | Human-readable schedule description (from `CRON_DESCRIPTION` env var) |
+| `paused` | boolean | Whether the scheduled handler is currently paused |
+
+### DELETE /api/managed response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `removed` | number | Number of managed entries that were removed |
+| `preserved` | number | Number of preserved entries kept intact |
+| `totalAfter` | number | Total entries in the list after removal |
+| `timestamp` | string | ISO 8601 timestamp of the operation |
+| `error` | string | Error message if the operation failed (omitted on success) |
+
+### GET /api/entries response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `managed` | SplitTunnelEntry[] | Entries managed by this Worker (description starts with managed tag) |
+| `preserved` | SplitTunnelEntry[] | Entries not managed by this Worker |
+| `managedCount` | number | Count of managed entries |
+| `preservedCount` | number | Count of preserved entries |
+| `totalCount` | number | Total count of all entries |
+
+## Web Dashboard
+
+The dashboard is served at `GET /` and provides a visual interface for the Worker. It requires the same Bearer token (webhook secret) to access API data; the token is entered via a login form and stored in the browser's sessionStorage.
+
+The dashboard has three cards:
+
+- **Activity**: Shows last sync time, M365 version, entry counts, dry-run flag, and any errors. Auto-refreshes every 60 seconds.
+- **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Force Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
+- **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
+- **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
+
+> **Note:** The dashboard will eventually be protected by Cloudflare Access; currently it uses Bearer token auth.
 
 ## Cron Schedule
 
@@ -168,7 +244,7 @@ The Worker uses a tag-based approach to distinguish between entries it owns and 
 
 ## Error Handling
 
-All errors are persisted to KV with a typed reason (`rate_limit`, `permission_denied`, `cf_api`, `fetch_endpoints`, `version_check`, `cf_unknown`, `max_entries_exceeded`) and surfaced in the `/status` endpoint. The error is cleared on the next successful sync.
+All errors are persisted to KV with a typed reason (`rate_limit`, `permission_denied`, `cf_api`, `fetch_endpoints`, `version_check`, `cf_unknown`, `max_entries_exceeded`) and surfaced in the `/api/status` endpoint. The error is cleared on the next successful sync.
 
 | Error type | Behavior |
 |------------|----------|
@@ -211,11 +287,35 @@ curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"
 ## Production Rollout Recommendations
 
 1. Deploy first with `DRY_RUN` set to `"true"` (via dashboard or `--var`). This computes all changes without writing them to the Cloudflare API.
-2. Wait for one cron cycle to run, or trigger `POST /sync` manually.
-3. Check Worker logs and the `/status` endpoint for the sync result.
-4. Verify the diff using `/preview` to confirm the entries that would be added and removed.
+2. Wait for one cron cycle to run, or trigger `POST /api/sync` manually.
+3. Check Worker logs and the `/api/status` endpoint for the sync result.
+4. Verify the diff using `/api/preview` to confirm the entries that would be added and removed.
 5. Once satisfied, set `DRY_RUN` to `"false"` (via dashboard or `--var`) and redeploy.
 6. Monitor Worker logs for the first few days to confirm syncs are succeeding and the split tunnel list remains correct.
+
+## Operational Notes
+
+### Pausing syncs
+
+Use the dashboard toggle or `POST /api/schedule` with `{"paused": true}`. When paused, the cron handler logs a skip message and does not execute the sync. The pause state is stored in KV and persists across deployments.
+
+### Resuming syncs
+
+Use the dashboard toggle or `POST /api/schedule` with `{"paused": false}`. KV is eventually consistent; changes may take up to 60 seconds to propagate, which is negligible compared to the daily cron interval.
+
+### Force sync
+
+Use the dashboard's "Force Sync Now" button or `POST /api/sync` with `{"force": true}`. This bypasses the M365 version check and always fetches and applies the latest endpoints, even when the schedule is paused.
+
+### Changing the cron schedule
+
+Edit the `triggers.crons` array in `wrangler.jsonc` and update `CRON_EXPRESSION` and `CRON_DESCRIPTION` env vars to match. Redeploy with `npm run deploy`. The dashboard reads these values at runtime.
+
+### Removing managed entries
+
+Use the dashboard's "Remove Managed" button or `DELETE /api/managed`. This removes all M365-managed entries from the split tunnel exclude list while preserving manually-added or third-party entries. After removal, the next scheduled sync (or force sync) will re-fetch and re-apply the latest M365 endpoints.
+
+Note: If a scheduled sync runs immediately after a remove operation (before the KV state update propagates), the managed entries may be re-added. This is unlikely with a daily cron schedule but can occur if a force sync is triggered manually right after removal.
 
 ## Future Enhancements
 

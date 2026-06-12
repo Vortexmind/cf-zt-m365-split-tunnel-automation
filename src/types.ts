@@ -76,3 +76,38 @@ export interface SyncState {
   lastResultSummary?: SyncResult;
   lastError?: { type: string; message: string; timestamp: string };
 }
+
+export interface ScheduleState {
+  /** Cron expression for the scheduled trigger (from CRON_EXPRESSION env var) */
+  cron: string;
+  /** Human-readable schedule description (from CRON_DESCRIPTION env var) */
+  description: string;
+  /** Whether the scheduled handler is paused (skips cron runs) */
+  paused: boolean;
+}
+
+export interface RemoveResult {
+  /** Number of managed entries that were removed */
+  removed: number;
+  /** Number of preserved entries kept intact */
+  preserved: number;
+  /** Total entries in the list after removal */
+  totalAfter: number;
+  /** ISO 8601 timestamp of the operation */
+  timestamp: string;
+  /** Error message if the operation failed */
+  error?: string;
+}
+
+export interface EntriesResult {
+  /** Managed entries (description starts with managedTag) */
+  managed: SplitTunnelEntry[];
+  /** Preserved entries (not managed by this worker) */
+  preserved: SplitTunnelEntry[];
+  /** Count of managed entries */
+  managedCount: number;
+  /** Count of preserved entries */
+  preservedCount: number;
+  /** Total count of all entries */
+  totalCount: number;
+}
