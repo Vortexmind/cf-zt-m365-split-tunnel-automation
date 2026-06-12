@@ -16,7 +16,7 @@ This Worker gives you control over how Microsoft 365 endpoints are managed in yo
 - **Observability.** Exposes `/api/status`, `/api/preview`, structured logging, and last-error tracking in KV for visibility into sync operations.
 - **On-demand sync.** Supports daily cron scheduling plus immediate updates outside the schedule via `POST /api/sync`.
 
-> **Alternative approach:** Microsoft recommends an alternative where M365 traffic is sent through the tunnel but [inspection is bypassed](https://developers.cloudflare.com/cloudflare-one/traffic-policies/application-app-types/#microsoft-365-integration), rather than excluding it from the tunnel entirely.
+> **Alternative approach:** Microsoft recommends an alternative where M365 traffic is sent through the tunnel but [inspection is bypassed](https://developers.cloudflare.com/cloudflare-one/traffic-policies/application-app-types/#microsoft-365-integration), rather than excluding it from the tunnel entirely. Cloudflare also offers a [global toggle for M365 traffic](https://github.com/Vortexmind/cf-zt-m365-split-tunnel-automation) if a granular approach is not required.
 
 ## How it works
 
