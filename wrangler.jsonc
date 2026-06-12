@@ -9,8 +9,13 @@
 	],
 	"workers_dev": false,
 	"observability": {
+		"logs": {
 		"enabled": true,
-		"head_sampling_rate": 1
+		"invocation_logs": true
+		},
+		"traces": {
+		"enabled": false
+		}
 	},
 	"triggers": {
 		"crons": [
@@ -29,6 +34,10 @@
 			"custom_domain": true
 		}
 	],
+	"assets": {
+		"not_found_handling": "single-page-application",
+		"run_worker_first": ["/api/*"]
+	},
 	"vars": {
 		// M365 instance (Worldwide, China, USGovDoD, USGovGCCHigh)
 		"M365_INSTANCE": "Worldwide",

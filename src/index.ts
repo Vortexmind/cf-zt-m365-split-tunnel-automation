@@ -6,7 +6,6 @@ import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { PermissionError, CfApiError } from "./cloudflare/client";
 import { loadState, loadPaused, savePaused } from "./state";
-import { UI_HTML } from "./ui";
 import type { ScheduleState } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -29,18 +28,13 @@ export default {
       return new Response("ok", { status: 200 });
     }
 
-    if (request.method === "GET" && path === "/") {
-      return new Response(UI_HTML, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html",
-          "Cache-Control": "no-store",
-        },
-      });
-    }
-
-    if (request.method === "GET" && path === "/favicon.ico") {
-      return new Response(null, { status: 404 });
+    if (request.method === "GET" && path === "/api/config-status") {
+      const accessConfigured =
+        !!env.ACCESS_POLICY_AUD &&
+        !!env.ACCESS_TEAM_DOMAIN &&
+        env.ACCESS_POLICY_AUD !== "dev" &&
+        env.ACCESS_TEAM_DOMAIN !== "dev";
+      return jsonResponse({ accessConfigured });
     }
 
     // Authenticated routes (require auth and config)

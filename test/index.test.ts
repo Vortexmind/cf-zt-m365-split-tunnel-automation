@@ -47,19 +47,6 @@ describe("fetch handler - auth enforcement", () => {
     expect(res.status).toBe(200);
   });
 
-  it("GET / returns HTML without auth", async () => {
-    const env = createEnv();
-    const res = await worker.fetch!(makeRequest("/"), env);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("text/html");
-  });
-
-  it("GET /favicon.ico returns 404 without auth", async () => {
-    const env = createEnv();
-    const res = await worker.fetch!(makeRequest("/favicon.ico"), env);
-    expect(res.status).toBe(404);
-  });
-
   it("GET /api/status returns 401 when ACCESS_POLICY_AUD is not 'dev' and no token is present", async () => {
     const env = createEnv({}, {
       ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
@@ -174,14 +161,6 @@ describe("fetch handler - auth enforcement", () => {
 });
 
 describe("fetch handler - routes with auth", () => {
-  it("GET / returns HTML with correct Content-Type and Cache-Control", async () => {
-    const env = createEnv();
-    const res = await worker.fetch!(makeRequest("/"), env);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("text/html");
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-  });
-
   it("GET /api/schedule returns cron, description, and paused state", async () => {
     const env = createEnv();
     const res = await worker.fetch!(
@@ -291,6 +270,49 @@ describe("fetch handler - routes with auth", () => {
     expect(body.clientRequestId).toBe("req-123");
     expect(body.lastVersion).toBe("1234567890");
     expect(body.lastSyncedAt).toBe("2026-01-01T00:00:00Z");
+  });
+});
+
+describe("fetch handler - config-status", () => {
+  it("GET /api/config-status returns accessConfigured: true with real Access vars", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(makeRequest("/api/config-status"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.accessConfigured).toBe(true);
+  });
+
+  it("GET /api/config-status returns accessConfigured: false with dev sentinel", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(makeRequest("/api/config-status"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.accessConfigured).toBe(false);
+  });
+
+  it("GET /api/config-status returns accessConfigured: false with empty Access vars", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "",
+      ACCESS_POLICY_AUD: "",
+    });
+    const res = await worker.fetch!(makeRequest("/api/config-status"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.accessConfigured).toBe(false);
+  });
+
+  it("GET /api/config-status returns accessConfigured: false when only ACCESS_POLICY_AUD is set", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(makeRequest("/api/config-status"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.accessConfigured).toBe(false);
   });
 });
 

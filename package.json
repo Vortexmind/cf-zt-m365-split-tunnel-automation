@@ -6,17 +6,29 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "wrangler dev --test-scheduled",
-    "deploy": "wrangler deploy --keep-vars",
+    "dev": "vite dev",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy --keep-vars",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {
+    "@cloudflare/kumo": "^2.5.2",
+    "@cloudflare/vite-plugin": "latest",
     "@cloudflare/vitest-pool-workers": "latest",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^25.9.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.0",
     "typescript": "latest",
+    "vite": "^8.0.16",
     "vitest": "latest",
     "wrangler": "latest"
   },
