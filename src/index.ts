@@ -1,12 +1,12 @@
-import { parseConfig } from "./config";
+import { parseConfig, VALID_INSTANCES, VALID_CATEGORIES } from "./config";
 import { validateAccessAuth } from "./auth";
 import { executeSync } from "./handlers/sync";
 import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { PermissionError, CfApiError } from "./cloudflare/client";
-import { loadState, loadPaused, savePaused, loadServices, saveServices } from "./state";
-import type { ScheduleState } from "./types";
+import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings } from "./state";
+import type { ScheduleState, SettingsOverride } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -18,6 +18,29 @@ function jsonResponse(data: unknown, status = 200): Response {
 const DEFAULT_CRON = "17 6 * * *";
 const DEFAULT_CRON_DESCRIPTION = "Daily at 06:17 UTC";
 const VALID_SERVICES = ["Exchange", "SharePoint", "Skype"] as const;
+
+function buildSettingsResponse(env: Env, settingsOverride: SettingsOverride | undefined) {
+  const resolve = <T>(override: T | undefined, envValue: string | undefined, defaultValue: T, parser: (v: string) => T): { value: T; source: "kv" | "env" | "default" } => {
+    if (override !== undefined) return { value: override, source: "kv" };
+    if (envValue !== undefined && envValue !== "") {
+      try { return { value: parser(envValue), source: "env" }; } catch { /* fall through to default */ }
+    }
+    return { value: defaultValue, source: "default" };
+  };
+
+  const parseBool = (v: string) => v.toLowerCase() === "true";
+  const parseNum = (v: string) => Number.parseInt(v, 10);
+  const identity = (v: string) => v;
+
+  return {
+    m365Instance: resolve(settingsOverride?.m365Instance, env.M365_INSTANCE, "Worldwide", identity),
+    m365Categories: resolve(settingsOverride?.m365Categories, env.M365_CATEGORIES, "Optimize,Allow", identity),
+    includeIpv6: resolve(settingsOverride?.includeIpv6, env.INCLUDE_IPV6, true, parseBool),
+    includeUrls: resolve(settingsOverride?.includeUrls, env.INCLUDE_URLS, true, parseBool),
+    dryRun: resolve(settingsOverride?.dryRun, env.DRY_RUN, false, parseBool),
+    maxEntries: resolve(settingsOverride?.maxEntries, env.MAX_ENTRIES, 1000, parseNum),
+  };
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -49,7 +72,8 @@ export default {
 
     let config;
     try {
-      config = parseConfig(env, servicesOverride);
+      const settingsOverride = await loadSettings(env.STATE);
+      config = parseConfig(env, servicesOverride, settingsOverride);
     } catch (err) {
       console.error(JSON.stringify({ event: "http.error", step: "parseConfig", error: String(err) }));
       return jsonResponse({ error: `Configuration error: ${String(err)}` }, 500);
@@ -152,6 +176,70 @@ export default {
         return jsonResponse({ services });
       }
 
+      if (request.method === "GET" && path === "/api/settings") {
+        const settingsOverride = await loadSettings(env.STATE);
+        const response = buildSettingsResponse(env, settingsOverride);
+        return jsonResponse(response);
+      }
+
+      if (request.method === "POST" && path === "/api/settings") {
+        let updates: Partial<SettingsOverride> = {};
+        try {
+          const body = await request.json() as Partial<SettingsOverride>;
+          updates = body;
+        } catch {
+          // Invalid JSON
+        }
+
+        // If the body is an empty object, treat it as "clear all overrides"
+        if (Object.keys(updates).length === 0) {
+          await saveSettings(env.STATE, {});
+          console.log(JSON.stringify({ event: "settings.update", action: "reset" }));
+          const settingsOverride = await loadSettings(env.STATE);
+          const response = buildSettingsResponse(env, settingsOverride);
+          return jsonResponse(response);
+        }
+
+        // Validate m365Instance if provided
+        if (updates.m365Instance !== undefined && !VALID_INSTANCES.includes(updates.m365Instance as any)) {
+          return jsonResponse({ error: `Invalid M365 instance: "${updates.m365Instance}". Must be one of: ${VALID_INSTANCES.join(", ")}` }, 400);
+        }
+
+        // Validate m365Categories if provided
+        if (updates.m365Categories !== undefined) {
+          const cats = updates.m365Categories.split(",").map(s => s.trim());
+          const invalid = cats.filter(c => !(VALID_CATEGORIES as readonly string[]).includes(c));
+          if (invalid.length > 0) {
+            return jsonResponse({ error: `Invalid M365 categories: ${invalid.join(", ")}. Valid values: ${VALID_CATEGORIES.join(", ")}` }, 400);
+          }
+        }
+
+        // Validate maxEntries if provided
+        if (updates.maxEntries !== undefined) {
+          if (typeof updates.maxEntries !== "number" || updates.maxEntries <= 0 || !Number.isInteger(updates.maxEntries)) {
+            return jsonResponse({ error: `Invalid maxEntries: must be a positive integer` }, 400);
+          }
+        }
+
+        // Load existing settings, merge updates, and save
+        const existing = await loadSettings(env.STATE) ?? {};
+        const merged = { ...existing };
+        for (const [key, value] of Object.entries(updates)) {
+          if (value === undefined || value === null || value === "") {
+            // Remove the key to revert to env/default
+            delete (merged as Record<string, unknown>)[key];
+          } else {
+            (merged as Record<string, unknown>)[key] = value;
+          }
+        }
+        await saveSettings(env.STATE, merged);
+        console.log(JSON.stringify({ event: "settings.update", updates: Object.keys(updates) }));
+
+        const settingsOverride = await loadSettings(env.STATE);
+        const response = buildSettingsResponse(env, settingsOverride);
+        return jsonResponse(response);
+      }
+
       return jsonResponse({ error: "Not found" }, 404);
     } catch (err) {
       console.error(JSON.stringify({ event: "http.error", path, error: String(err) }));
@@ -168,10 +256,11 @@ export default {
 
     // Load KV-persisted services override
     const servicesOverride = await loadServices(env.STATE);
+    const settingsOverride = await loadSettings(env.STATE);
 
     let config;
     try {
-      config = parseConfig(env, servicesOverride);
+      config = parseConfig(env, servicesOverride, settingsOverride);
     } catch (err) {
       console.error(JSON.stringify({ event: "scheduled.error", step: "parseConfig", error: String(err) }));
       return;

@@ -1,4 +1,4 @@
-import { SyncState, SyncResult } from "./types";
+import { SyncState, SyncResult, SettingsOverride } from "./types";
 
 const KV_KEYS = {
   CLIENT_REQUEST_ID: "m365:clientRequestId",
@@ -8,6 +8,7 @@ const KV_KEYS = {
   LAST_ERROR: "m365:lastError",
   PAUSED: "m365:paused",
   SERVICES: "m365:services",
+  SETTINGS: "m365:settings",
 } as const;
 
 function safeParseJson<T>(raw: string | null, fallback: T): T {
@@ -119,4 +120,24 @@ export async function saveServices(kv: KVNamespace, services: string[] | null): 
   } else {
     await kv.put(KV_KEYS.SERVICES, JSON.stringify(services));
   }
+}
+
+/**
+ * Load the user-configured settings override from KV.
+ * Returns undefined if no KV key exists (not configured — fall back to env var/default).
+ * Returns undefined if the stored JSON is corrupt.
+ */
+export async function loadSettings(kv: KVNamespace): Promise<SettingsOverride | undefined> {
+  const raw = await kv.get(KV_KEYS.SETTINGS);
+  if (raw === null) return undefined;
+  return safeParseJson<SettingsOverride | undefined>(raw, undefined);
+}
+
+/**
+ * Save the user-configured settings override to KV.
+ * The caller is responsible for merging; this function stores the complete object.
+ * An empty object {} is valid and means "user saved but all reverted to defaults".
+ */
+export async function saveSettings(kv: KVNamespace, settings: SettingsOverride): Promise<void> {
+  await kv.put(KV_KEYS.SETTINGS, JSON.stringify(settings));
 }

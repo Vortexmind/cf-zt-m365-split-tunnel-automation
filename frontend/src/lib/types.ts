@@ -79,3 +79,32 @@ export interface ServicesConfig {
   /** null means "all services" (no filter applied); string[] is the explicit selection */
   services: string[] | null;
 }
+
+/** The source of a setting value */
+export type SettingSource = "kv" | "env" | "default";
+
+/** A single setting with its effective value and source */
+export interface SettingDetail<T> {
+  value: T;
+  source: SettingSource;
+}
+
+/** Response from GET /api/settings */
+export interface SettingsConfig {
+  m365Instance: SettingDetail<string>;
+  m365Categories: SettingDetail<string>;
+  includeIpv6: SettingDetail<boolean>;
+  includeUrls: SettingDetail<boolean>;
+  dryRun: SettingDetail<boolean>;
+  maxEntries: SettingDetail<number>;
+}
+
+/** Body for POST /api/settings - only include keys you want to override; omit keys to revert to env/default */
+export interface SettingsUpdate {
+  m365Instance?: string;
+  m365Categories?: string;
+  includeIpv6?: boolean;
+  includeUrls?: boolean;
+  dryRun?: boolean;
+  maxEntries?: number;
+}

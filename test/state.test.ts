@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { loadPaused, savePaused, loadServices, saveServices } from "../src/state";
+import { loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings } from "../src/state";
 
 function createMockKv(stored: Record<string, string> = {}) {
   const store = { ...stored };
@@ -89,5 +89,39 @@ describe("loadServices / saveServices", () => {
     const kv = createMockKv({});
     await saveServices(kv, []);
     expect(kv.put).toHaveBeenCalledWith("m365:services", JSON.stringify([]));
+  });
+});
+
+describe("loadSettings / saveSettings", () => {
+  it("returns undefined when KV key is absent", async () => {
+    const kv = createMockKv({});
+    const result = await loadSettings(kv);
+    expect(result).toBeUndefined();
+  });
+
+  it("returns parsed object when KV contains valid JSON", async () => {
+    const settings = { dryRun: true, maxEntries: 500 };
+    const kv = createMockKv({ "m365:settings": JSON.stringify(settings) });
+    const result = await loadSettings(kv);
+    expect(result).toEqual(settings);
+  });
+
+  it("returns undefined when KV contains corrupt JSON", async () => {
+    const kv = createMockKv({ "m365:settings": "not-valid-json{" });
+    const result = await loadSettings(kv);
+    expect(result).toBeUndefined();
+  });
+
+  it("saveSettings stores JSON to KV", async () => {
+    const kv = createMockKv({});
+    const settings = { m365Instance: "Worldwide", includeIpv6: false };
+    await saveSettings(kv, settings);
+    expect(kv.put).toHaveBeenCalledWith("m365:settings", JSON.stringify(settings));
+  });
+
+  it("saveSettings stores empty object as {}", async () => {
+    const kv = createMockKv({});
+    await saveSettings(kv, {});
+    expect(kv.put).toHaveBeenCalledWith("m365:settings", "{}");
   });
 });

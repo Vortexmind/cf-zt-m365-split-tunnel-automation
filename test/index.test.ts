@@ -445,3 +445,129 @@ describe("scheduled handler", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("fetch handler - settings", () => {
+  it("GET /api/settings returns defaults when no KV override", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(makeRequest("/api/settings"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.includeIpv6).toEqual({ value: true, source: "env" });
+    expect(body.maxEntries).toEqual({ value: 1000, source: "env" });
+  });
+
+  it("GET /api/settings returns KV overrides with source 'kv'", async () => {
+    const env = createEnv({ "m365:settings": JSON.stringify({ dryRun: true, includeIpv6: false }) });
+    const res = await worker.fetch!(makeRequest("/api/settings"), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.dryRun).toEqual({ value: true, source: "kv" });
+    expect(body.includeIpv6).toEqual({ value: false, source: "kv" });
+  });
+
+  it("POST /api/settings saves and returns updated settings", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ includeIpv6: false }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.includeIpv6).toEqual({ value: false, source: "kv" });
+    expect(body.dryRun).toEqual({ value: false, source: "env" });
+    expect(env.STATE.put).toHaveBeenCalledWith("m365:settings", JSON.stringify({ includeIpv6: false }));
+  });
+
+  it("POST /api/settings with invalid m365Instance returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ m365Instance: "Invalid" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toContain("Invalid M365 instance");
+  });
+
+  it("POST /api/settings with invalid m365Categories returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ m365Categories: "Invalid" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toContain("Invalid M365 categories");
+  });
+
+  it("POST /api/settings with invalid maxEntries (negative) returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxEntries: -1 }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/settings with invalid maxEntries (non-integer) returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxEntries: 1.5 }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/settings with null value reverts to env/default", async () => {
+    const env = createEnv({ "m365:settings": JSON.stringify({ includeIpv6: false }) });
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ includeIpv6: null }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.includeIpv6).toEqual({ value: true, source: "env" });
+  });
+
+  it("POST /api/settings with empty body {} clears all overrides", async () => {
+    const env = createEnv({ "m365:settings": JSON.stringify({ dryRun: true, includeIpv6: false }) });
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const sources = Object.values(body).map(
+      (v) => (v as { source: string }).source
+    );
+    expect(sources).not.toContain("kv");
+  });
+});

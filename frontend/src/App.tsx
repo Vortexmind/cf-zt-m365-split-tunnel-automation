@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { LayerCard, Text, Banner, CloudflareLogo, Button } from "@cloudflare/kumo";
 import { Sun, Moon } from "@phosphor-icons/react";
-import { isSessionExpired, fetchConfigStatus } from "./lib/api";
-import type { ConfigStatus } from "./lib/types";
+import { isSessionExpired, fetchConfigStatus, fetchSettings } from "./lib/api";
+import type { ConfigStatus, SettingsConfig } from "./lib/types";
 import { loadMode, saveMode, applyMode } from "./lib/theme";
 import type { ColorMode } from "./lib/theme";
 import { ActivityCard } from "./components/ActivityCard";
@@ -11,6 +11,7 @@ import { ServicesCard } from "./components/ServicesCard";
 import { PreviewCard } from "./components/PreviewCard";
 import { EntriesCard } from "./components/EntriesCard";
 import { AccessUnconfigured } from "./components/AccessUnconfigured";
+import { SettingsCard } from "./components/SettingsCard";
 
 export function App() {
   const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
@@ -43,6 +44,14 @@ export function App() {
 function Dashboard() {
   const [sessionExpired, setSessionExpired] = useState(isSessionExpired());
   const [colorMode, setColorMode] = useState<ColorMode>(loadMode);
+  const [tab, setTab] = useState<"dashboard" | "settings">("dashboard");
+  const [dryRunEnabled, setDryRunEnabled] = useState(false);
+
+  useEffect(() => {
+    fetchSettings()
+      .then((config) => setDryRunEnabled(config.dryRun.value))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -50,6 +59,15 @@ function Dashboard() {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleTabChange = (newTab: "dashboard" | "settings") => {
+    setTab(newTab);
+    if (newTab === "dashboard") {
+      fetchSettings()
+        .then((config) => setDryRunEnabled(config.dryRun.value))
+        .catch(() => {});
+    }
+  };
 
   const handleToggleMode = () => {
     const next: ColorMode = colorMode === "dark" ? "light" : "dark";
@@ -85,14 +103,52 @@ function Dashboard() {
           <Text variant="secondary">Automated sync of Microsoft 365 endpoints to your Zero Trust split tunnel exclude list</Text>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem", maxWidth: "960px", margin: "0 auto" }}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <ActivityCard />
-          <ScheduleCard />
+      <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+        <div className="flex gap-1 mb-4 border-b border-kumo-hairline">
+          <button
+            onClick={() => handleTabChange("dashboard")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "dashboard"
+                ? "border-[#f97316] text-[#f97316]"
+                : "border-transparent text-kumo-subtle hover:text-kumo-default"
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => handleTabChange("settings")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "settings"
+                ? "border-[#f97316] text-[#f97316]"
+                : "border-transparent text-kumo-subtle hover:text-kumo-default"
+            }`}
+          >
+            Settings
+          </button>
         </div>
-        <ServicesCard />
-        <PreviewCard />
-        <EntriesCard />
+        {tab === "dashboard" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
+            {dryRunEnabled && (
+              <Banner
+                variant="alert"
+                title="Dry Run mode is active"
+                description="Syncs are computing changes but not applying them to the Cloudflare API. Disable Dry Run in Settings to apply changes."
+                className="mb-0"
+              />
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <ActivityCard />
+              <ScheduleCard />
+            </div>
+            <ServicesCard />
+            <PreviewCard />
+            <EntriesCard />
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
+            <SettingsCard />
+          </div>
+        )}
       </div>
     </div>
   );

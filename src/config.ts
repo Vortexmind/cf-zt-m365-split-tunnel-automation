@@ -1,4 +1,4 @@
-import type { CategoryPriority } from "./types";
+import type { CategoryPriority, SettingsOverride } from "./types";
 
 export interface Config {
   accountId: string;
@@ -16,7 +16,9 @@ export interface Config {
   m365NoIpv6: boolean;
 }
 
-const VALID_CATEGORIES: readonly CategoryPriority[] = [
+export const VALID_INSTANCES = ["Worldwide", "China", "USGovDoD", "USGovGCCHigh"] as const;
+
+export const VALID_CATEGORIES: readonly CategoryPriority[] = [
   "Optimize",
   "Allow",
   "Default",
@@ -39,7 +41,7 @@ function parseInteger(value: string | undefined, defaultValue: number): number {
   return parsed;
 }
 
-export function parseConfig(env: Env, servicesOverride?: string[] | null): Config {
+export function parseConfig(env: Env, servicesOverride?: string[] | null, settingsOverride?: SettingsOverride): Config {
   if (!env.CF_ACCOUNT_ID) {
     throw new Error("CF_ACCOUNT_ID is required but not set");
   }
@@ -69,7 +71,7 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null): Confi
     }
   }
 
-  const categoryInput = env.M365_CATEGORIES || "Optimize,Allow";
+  const categoryInput = settingsOverride?.m365Categories !== undefined ? settingsOverride.m365Categories : (env.M365_CATEGORIES || "Optimize,Allow");
   const m365Categories = categoryInput
     .split(",")
     .map((s) => s.trim() as CategoryPriority);
@@ -81,21 +83,29 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null): Confi
     }
   }
 
-  const includeIpv6 = parseBoolean(env.INCLUDE_IPV6, true);
+  const includeIpv6 = settingsOverride?.includeIpv6 !== undefined ? settingsOverride.includeIpv6 : parseBoolean(env.INCLUDE_IPV6, true);
   const policyId = env.CF_POLICY_ID ?? "";
 
   return {
     accountId: env.CF_ACCOUNT_ID,
     policyId,
     apiToken: env.CF_API_TOKEN,
-    m365Instance: env.M365_INSTANCE || "Worldwide",
+    m365Instance: (() => {
+      const instance = settingsOverride?.m365Instance !== undefined ? settingsOverride.m365Instance : (env.M365_INSTANCE || "Worldwide");
+      if (!VALID_INSTANCES.includes(instance as any)) {
+        throw new Error(
+          `Invalid M365 instance: "${instance}". Must be one of: ${VALID_INSTANCES.join(", ")}`
+        );
+      }
+      return instance;
+    })(),
     m365Services,
     m365Categories,
     includeIpv6,
-    includeUrls: parseBoolean(env.INCLUDE_URLS, true),
+    includeUrls: settingsOverride?.includeUrls !== undefined ? settingsOverride.includeUrls : parseBoolean(env.INCLUDE_URLS, true),
     managedTag: env.MANAGED_TAG || "[m365-auto]",
-    dryRun: parseBoolean(env.DRY_RUN, false),
-    maxEntries: parseInteger(env.MAX_ENTRIES, 1000),
+    dryRun: settingsOverride?.dryRun !== undefined ? settingsOverride.dryRun : parseBoolean(env.DRY_RUN, false),
+    maxEntries: settingsOverride?.maxEntries !== undefined ? settingsOverride.maxEntries : parseInteger(env.MAX_ENTRIES, 1000),
     useDefaultProfile: policyId === "",
     m365NoIpv6: !includeIpv6,
   };

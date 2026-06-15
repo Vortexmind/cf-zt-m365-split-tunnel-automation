@@ -82,7 +82,8 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 9. Configure Cloudflare Access:
     - Create a Self-hosted Access application for the Worker's hostname
     - Note the Application AUD tag
-    - Set `ACCESS_TEAM_DOMAIN` and `ACCESS_POLICY_AUD` via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`
+    - Set `ACCESS_TEAM_DOMAIN` and `ACCESS_POLICY_AUD` via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**)
+    - Do not set them via `--var` at deploy time, as this would overwrite them on every subsequent deploy
 
 10. Set production variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`:
     ```bash
@@ -115,10 +116,12 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | `DRY_RUN` | `false` | No | When `true`, compute changes but do not apply them to the Cloudflare API |
 | `MAX_ENTRIES` | `1000` | No | Maximum number of entries per split tunnel list. Sync is aborted if the merged list would exceed this limit |
 | `CF_API_TOKEN` | (none) | Yes (secret) | Cloudflare API token with Zero Trust edit permissions |
-| `ACCESS_TEAM_DOMAIN` | (none) | Yes | Cloudflare Access team domain URL (e.g. `https://your-team.cloudflareaccess.com`) |
-| `ACCESS_POLICY_AUD` | (none) | Yes | Cloudflare Access application AUD tag. Set to `dev` to bypass auth in local development |
+| `ACCESS_TEAM_DOMAIN` | (none) | Yes | Cloudflare Access team domain URL (e.g. `https://your-team.cloudflareaccess.com`). Set via the dashboard only |
+| `ACCESS_POLICY_AUD` | (none) | Yes | Cloudflare Access application AUD tag. Set via the dashboard only. Use `dev` locally in `.dev.vars` to bypass auth in development |
 | `CRON_EXPRESSION` | `17 6 * * *` | No | Cron expression displayed in the dashboard. Must match the `triggers.crons` value in `wrangler.jsonc` |
 | `CRON_DESCRIPTION` | `Daily at 06:17 UTC` | No | Human-readable description of the schedule, displayed in the dashboard |
+
+**Dashboard-configurable settings:** The following settings can be changed at runtime via the Settings tab in the web dashboard, without redeploying: `M365_INSTANCE`, `M365_CATEGORIES`, `INCLUDE_IPV6`, `INCLUDE_URLS`, `DRY_RUN`, `MAX_ENTRIES`. Dashboard-saved values take priority over environment variables. To revert a setting to its environment variable default, remove the override in the Settings tab. Settings that are not exposed in the dashboard (`CF_ACCOUNT_ID`, `CF_POLICY_ID`, `CF_API_TOKEN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_POLICY_AUD`, `MANAGED_TAG`, `CRON_EXPRESSION`, `CRON_DESCRIPTION`) can only be changed by updating environment variables and redeploying.
 
 ## API Endpoints
 
@@ -135,6 +138,8 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
 | DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
+| GET | `/api/settings` | Yes | Returns current settings with effective values and source (KV override, env var, or default) |
+| POST | `/api/settings` | Yes | Save settings overrides. Body: partial JSON with keys to override. Omit keys to revert to env/default |
 
 All authenticated endpoints require a valid Cloudflare Access JWT, passed via the `cf-access-jwt-assertion` header. Access sets this automatically for browser users (via the `CF_Authorization` cookie) and for API callers using service tokens (Access injects the header after validating `CF-Access-Client-Id`/`CF-Access-Client-Secret`).
 
@@ -142,8 +147,8 @@ All authenticated endpoints require a valid Cloudflare Access JWT, passed via th
 
 1. In the Cloudflare Zero Trust dashboard, create a new **Self-hosted** Access application for your Worker's hostname (e.g. `your-worker.your-account.workers.dev`).
 2. Note the **Application AUD** tag from the application settings.
-3. Set the `ACCESS_TEAM_DOMAIN` environment variable to your team domain (e.g. `https://your-team.cloudflareaccess.com`).
-4. Set the `ACCESS_POLICY_AUD` environment variable to the AUD tag from step 2.
+3. Set the `ACCESS_TEAM_DOMAIN` environment variable to your team domain (e.g. `https://your-team.cloudflareaccess.com`) via the Cloudflare dashboard.
+4. Set the `ACCESS_POLICY_AUD` environment variable to the AUD tag from step 2 via the Cloudflare dashboard.
 5. Create an Access policy that allows the appropriate users or groups.
 
 For API access from automated systems, create a **Service Token** in Zero Trust > Access > Service Auth > Service Tokens, then add a **Service Auth** policy to the same Access application that accepts that token. When calling the API, include the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. Access validates these at the edge and injects the JWT header before forwarding to the Worker.
@@ -209,7 +214,28 @@ curl -X DELETE -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
 # Fetch the current split tunnel exclude list
 curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
      -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
-     http://localhost:8787/api/entries
+      http://localhost:8787/api/entries
+```
+
+```bash
+# Get current settings
+curl -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+     -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+     http://localhost:8787/api/settings
+
+# Override specific settings
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{"includeIpv6": false, "dryRun": true}' \
+              http://localhost:8787/api/settings
+
+# Revert all settings to environment variable defaults
+curl -X POST -H "CF-Access-Client-Id: YOUR_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: YOUR_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{}' \
+              http://localhost:8787/api/settings
 ```
 
 ### POST /api/sync body
@@ -254,6 +280,32 @@ The optional JSON body supports:
 | `preservedCount` | number | Count of preserved entries |
 | `totalCount` | number | Total count of all entries |
 
+### GET /api/settings response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `m365Instance` | `{ value: string, source: "kv" \| "env" \| "default" }` | M365 cloud instance |
+| `m365Categories` | `{ value: string, source: "kv" \| "env" \| "default" }` | Comma-separated categories |
+| `includeIpv6` | `{ value: boolean, source: "kv" \| "env" \| "default" }` | Whether IPv6 addresses are included |
+| `includeUrls` | `{ value: boolean, source: "kv" \| "env" \| "default" }` | Whether URL/host entries are included |
+| `dryRun` | `{ value: boolean, source: "kv" \| "env" \| "default" }` | Whether dry run mode is active |
+| `maxEntries` | `{ value: number, source: "kv" \| "env" \| "default" }` | Maximum entries per split tunnel list |
+
+The `source` field indicates where the effective value comes from: `kv` (saved via dashboard), `env` (from environment variable), or `default` (hardcoded default).
+
+### POST /api/settings body
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `m365Instance` | string | (optional) M365 cloud instance. Valid values: `Worldwide`, `China`, `USGovDoD`, `USGovGCCHigh` |
+| `m365Categories` | string | (optional) Comma-separated categories. Valid values: `Optimize`, `Allow`, `Default` |
+| `includeIpv6` | boolean | (optional) Whether to include IPv6 addresses |
+| `includeUrls` | boolean | (optional) Whether to include URL/host entries |
+| `dryRun` | boolean | (optional) Whether to enable dry run mode |
+| `maxEntries` | number | (optional) Maximum entries per split tunnel list (must be a positive integer) |
+
+Only include keys you want to override. Omitted keys will retain their current override (if any). To revert a specific key to its environment variable default, include it with a `null` or empty string value. To revert all settings, send an empty object `{}`.
+
 ## Web Dashboard
 
 The dashboard is a static single-page application (SPA) served as static assets alongside the Worker. It is protected by Cloudflare Access; when a user navigates to the dashboard, Access presents a login page and sets a `CF_Authorization` cookie on success. The dashboard reads this cookie and passes it as the `CF-Access-JWT-Assertion` header on API calls.
@@ -267,6 +319,8 @@ The dashboard has five cards:
 - **Services**: Toggle switches for each configurable service area (Exchange, SharePoint, Skype). The Common service area is always included and is shown as a read-only info row. Changes are saved to KV via `POST /api/services` and take effect on the next sync (scheduled or manual). See [Configuring service areas](#configuring-service-areas) below.
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
+
+The dashboard also has a **Settings** tab with controls for M365 Instance, M365 Categories, Include IPv6, Include URLs, Dry Run, and Max Entries. Changes are saved to KV and take effect on the next sync. Each setting shows its source (Custom, Env, or Default). When Dry Run mode is active, a warning banner is displayed on the Dashboard tab.
 
 ## Cron Schedule
 

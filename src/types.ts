@@ -111,3 +111,13 @@ export interface EntriesResult {
   /** Total count of all entries */
   totalCount: number;
 }
+
+/** User-configurable settings stored in KV. Keys present mean "overridden"; keys absent mean "use env var/default". */
+export interface SettingsOverride {
+  m365Instance?: string;
+  m365Categories?: string;
+  includeIpv6?: boolean;
+  includeUrls?: boolean;
+  dryRun?: boolean;
+  maxEntries?: number;
+}
