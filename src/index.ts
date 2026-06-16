@@ -5,7 +5,7 @@ import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { PermissionError, CfApiError } from "./cloudflare/client";
-import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron } from "./state";
+import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron, loadHistory } from "./state";
 import type { ScheduleState, SettingsOverride } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -84,6 +84,11 @@ export default {
         return jsonResponse(state);
       }
 
+      if (request.method === "GET" && path === "/api/history") {
+        const history = await loadHistory(env.STATE);
+        return jsonResponse(history);
+      }
+
       if (request.method === "GET" && path === "/api/preview") {
         const result = await executePreview(env.STATE, config);
         return jsonResponse(result);
@@ -97,7 +102,7 @@ export default {
         } catch {
           // Empty or invalid body: proceed with force=false
         }
-        const result = await executeSync(env.STATE, config, { force });
+        const result = await executeSync(env.STATE, config, { force, trigger: "manual" });
         return jsonResponse(result);
       }
 
@@ -270,7 +275,7 @@ export default {
     }
 
     try {
-      const result = await executeSync(env.STATE, config);
+      const result = await executeSync(env.STATE, config, { trigger: "cron" });
       if (result.error) {
         console.error(JSON.stringify({ event: "scheduled.error", error: result.error }));
       } else {

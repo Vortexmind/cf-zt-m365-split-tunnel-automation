@@ -107,3 +107,27 @@ export interface SettingsUpdate {
   dryRun?: boolean;
   maxEntries?: number;
 }
+
+// History log types (must be kept in sync with src/types.ts)
+export type HistoryTrigger = "manual" | "cron";
+export type HistoryOutcome = "success" | "error" | "skipped" | "dry_run";
+export type HistoryOpType = "sync" | "remove";
+
+export interface HistoryEntry {
+  timestamp: string;
+  opType: HistoryOpType;
+  trigger: HistoryTrigger;
+  outcome: HistoryOutcome;
+  version?: string;
+  candidates?: number;
+  added?: number;
+  removed?: number;
+  managedAfter?: number;
+  preserved?: number;
+  dryRun?: boolean;
+  removedCount?: number;
+  preservedCount?: number;
+  totalAfter?: number;
+  errorType?: string;
+  errorMessage?: string;
+}

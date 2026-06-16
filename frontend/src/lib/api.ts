@@ -1,4 +1,4 @@
-import type { SyncState, ScheduleState, RemoveResult, EntriesResult, PreviewResult, ConfigStatus, ServicesConfig, SettingsConfig, SettingsUpdate } from "./types";
+import type { SyncState, ScheduleState, RemoveResult, EntriesResult, PreviewResult, ConfigStatus, ServicesConfig, SettingsConfig, SettingsUpdate, HistoryEntry } from "./types";
 
 function getAccessCookie(): string | null {
   if (typeof document === "undefined") return null;
@@ -106,4 +106,8 @@ export function updateSettings(settings: SettingsUpdate): Promise<SettingsConfig
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
+}
+
+export function fetchHistory(): Promise<HistoryEntry[]> {
+  return apiFetch<HistoryEntry[]>("/api/history");
 }

@@ -11,6 +11,7 @@ import { ServicesCard } from "./components/ServicesCard";
 import { PreviewCard } from "./components/PreviewCard";
 import { EntriesCard } from "./components/EntriesCard";
 import { AccessUnconfigured } from "./components/AccessUnconfigured";
+import { HistoryCard } from "./components/HistoryCard";
 import { SettingsCard } from "./components/SettingsCard";
 
 export function App() {
@@ -44,7 +45,7 @@ export function App() {
 function Dashboard() {
   const [sessionExpired, setSessionExpired] = useState(isSessionExpired());
   const [colorMode, setColorMode] = useState<ColorMode>(loadMode);
-  const [tab, setTab] = useState<"dashboard" | "settings">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "settings" | "history">("dashboard");
   const [dryRunEnabled, setDryRunEnabled] = useState(false);
   const [syncTriggeredAt, setSyncTriggeredAt] = useState(0);
 
@@ -65,7 +66,7 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleTabChange = (newTab: "dashboard" | "settings") => {
+  const handleTabChange = (newTab: "dashboard" | "settings" | "history") => {
     setTab(newTab);
     if (newTab === "dashboard") {
       fetchSettings()
@@ -130,6 +131,16 @@ function Dashboard() {
           >
             Settings
           </button>
+          <button
+            onClick={() => handleTabChange("history")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "history"
+                ? "border-[#f97316] text-[#f97316]"
+                : "border-transparent text-kumo-subtle hover:text-kumo-default"
+            }`}
+          >
+            History
+          </button>
         </div>
         {tab === "dashboard" ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
@@ -149,9 +160,13 @@ function Dashboard() {
             <PreviewCard />
             <EntriesCard />
           </div>
-        ) : (
+        ) : tab === "settings" ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
             <SettingsCard />
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
+            <HistoryCard />
           </div>
         )}
       </div>

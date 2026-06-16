@@ -1,4 +1,4 @@
-import { SyncState, SyncResult, SettingsOverride } from "./types";
+import { SyncState, SyncResult, SettingsOverride, HistoryEntry } from "./types";
 
 const KV_KEYS = {
   CLIENT_REQUEST_ID: "m365:clientRequestId",
@@ -10,6 +10,7 @@ const KV_KEYS = {
   CRON: "m365:cron",
   SERVICES: "m365:services",
   SETTINGS: "m365:settings",
+  HISTORY: "m365:history",
 } as const;
 
 function safeParseJson<T>(raw: string | null, fallback: T): T {
@@ -149,4 +150,35 @@ export async function loadSettings(kv: KVNamespace): Promise<SettingsOverride | 
  */
 export async function saveSettings(kv: KVNamespace, settings: SettingsOverride): Promise<void> {
   await kv.put(KV_KEYS.SETTINGS, JSON.stringify(settings));
+}
+
+/**
+ * Load the run history log from KV.
+ * Returns an empty array if the key does not exist or the stored JSON is corrupt.
+ */
+export async function loadHistory(kv: KVNamespace): Promise<HistoryEntry[]> {
+  const raw = await kv.get(KV_KEYS.HISTORY);
+  return safeParseJson<HistoryEntry[]>(raw, []);
+}
+
+const HISTORY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const HISTORY_MAX_ENTRIES = 1000; // Safety cap to prevent unbounded KV value growth (25 MB limit)
+
+/**
+ * Append a history entry to the run log in KV.
+ * Prunes entries older than 30 days and caps at 1000 entries.
+ *
+ * NOTE: This function performs a read-modify-write on a single KV key.
+ * If two operations complete within milliseconds of each other, the second
+ * write could overwrite the first entry. This is an acceptable trade-off
+ * given the daily cron cadence — concurrent completions are extremely unlikely.
+ * A more robust approach would require Durable Objects or a dedicated logging
+ * pipeline, which is out of scope for this project.
+ */
+export async function appendHistory(kv: KVNamespace, entry: HistoryEntry): Promise<void> {
+  const existing = await loadHistory(kv);
+  const cutoff = Date.now() - HISTORY_MAX_AGE_MS;
+  const pruned = existing.filter(e => new Date(e.timestamp).getTime() > cutoff);
+  const updated = [entry, ...pruned].slice(0, HISTORY_MAX_ENTRIES);
+  await kv.put(KV_KEYS.HISTORY, JSON.stringify(updated));
 }

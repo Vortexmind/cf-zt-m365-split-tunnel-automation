@@ -119,3 +119,31 @@ export interface SettingsOverride {
   dryRun?: boolean;
   maxEntries?: number;
 }
+
+// History log types
+export type HistoryTrigger = "manual" | "cron";
+export type HistoryOutcome = "success" | "error" | "skipped" | "dry_run";
+export type HistoryOpType = "sync" | "remove";
+
+export interface HistoryEntry {
+  /** ISO 8601 timestamp — serves as both unique key and sort key */
+  timestamp: string;
+  opType: HistoryOpType;
+  trigger: HistoryTrigger;
+  outcome: HistoryOutcome;
+  /** Sync-specific fields (present when opType="sync") */
+  version?: string;
+  candidates?: number;
+  added?: number;
+  removed?: number;
+  managedAfter?: number;
+  preserved?: number;
+  dryRun?: boolean;
+  /** Remove-specific fields (present when opType="remove") */
+  removedCount?: number;
+  preservedCount?: number;
+  totalAfter?: number;
+  /** Error fields (present when outcome="error") */
+  errorType?: string;
+  errorMessage?: string;
+}
