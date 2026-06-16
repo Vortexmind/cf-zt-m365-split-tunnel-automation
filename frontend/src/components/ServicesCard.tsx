@@ -32,7 +32,7 @@ function setsEqual(a: Set<ServiceName>, b: Set<ServiceName>): boolean {
   return true;
 }
 
-export function ServicesCard() {
+export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
   const [savedConfig, setSavedConfig] = useState<ServicesConfig | null>(null);
   const [selected, setSelected] = useState<Set<ServiceName>>(new Set(ALL_SERVICES));
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,7 @@ export function ServicesCard() {
       setSelected(apiToSelection(result.services));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      onMutation?.();
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setSaveError(err.message);

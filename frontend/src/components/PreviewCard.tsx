@@ -1,29 +1,22 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { LayerCard, Text, Badge, Button, Banner, Table, Loader, Tooltip } from "@cloudflare/kumo";
 import { Eye, Info } from "@phosphor-icons/react";
 import { fetchPreview } from "../lib/api";
 import type { PreviewResult } from "../lib/types";
+import { FieldRow } from "./FieldRow";
 
-function FieldRow({ label, tooltip, children }: { label: string; tooltip?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <div className="flex items-center gap-1 shrink-0">
-        <Text variant="secondary">{label}</Text>
-        {tooltip && (
-          <Tooltip content={tooltip} render={<span className="inline-flex cursor-default text-kumo-subtle" />}>
-            <Info size={13} />
-          </Tooltip>
-        )}
-      </div>
-      <div className="text-right min-w-0">{children}</div>
-    </div>
-  );
-}
-
-export function PreviewCard() {
+export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
   const [data, setData] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState(0);
+  const [stale, setStale] = useState(false);
+
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey > lastFetchedAt && lastFetchedAt > 0) {
+      setStale(true);
+    }
+  }, [refreshKey, lastFetchedAt]);
 
   const handlePreview = useCallback(async () => {
     setLoading(true);
@@ -31,6 +24,8 @@ export function PreviewCard() {
     try {
       const result = await fetchPreview();
       setData(result);
+      setLastFetchedAt(refreshKey ?? 0);
+      setStale(false);
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setError(err.message);
@@ -38,7 +33,7 @@ export function PreviewCard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshKey]);
 
   return (
     <LayerCard className="p-4">
@@ -73,6 +68,9 @@ export function PreviewCard() {
           </div>
           {data.versionWarning && (
             <Banner variant="alert" description={data.versionWarning} className="mt-3" />
+          )}
+          {stale && (
+            <Banner variant="default" description="Configuration has changed since this preview was run. Run Preview again to see the updated diff." className="mt-3" />
           )}
           <div className="mt-4">
             <Text variant="secondary" DANGEROUS_style={{ fontWeight: 600, fontSize: "0.8125rem" }}>

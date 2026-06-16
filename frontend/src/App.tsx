@@ -47,10 +47,17 @@ function Dashboard() {
   const [colorMode, setColorMode] = useState<ColorMode>(loadMode);
   const [tab, setTab] = useState<"dashboard" | "settings" | "history">("dashboard");
   const [dryRunEnabled, setDryRunEnabled] = useState(false);
-  const [syncTriggeredAt, setSyncTriggeredAt] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleSyncComplete = () => {
-    setSyncTriggeredAt(Date.now());
+  const handleDataMutation = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleSettingsMutation = () => {
+    setRefreshKey(prev => prev + 1);
+    fetchSettings()
+      .then((config) => setDryRunEnabled(config.dryRun.value))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -68,11 +75,6 @@ function Dashboard() {
 
   const handleTabChange = (newTab: "dashboard" | "settings" | "history") => {
     setTab(newTab);
-    if (newTab === "dashboard") {
-      fetchSettings()
-        .then((config) => setDryRunEnabled(config.dryRun.value))
-        .catch(() => {});
-    }
   };
 
   const handleToggleMode = () => {
@@ -153,16 +155,16 @@ function Dashboard() {
               />
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <ActivityCard syncTriggeredAt={syncTriggeredAt} />
-              <ScheduleCard onSyncComplete={handleSyncComplete} />
+              <ActivityCard refreshKey={refreshKey} />
+              <ScheduleCard onDataMutation={handleDataMutation} />
             </div>
-            <ServicesCard />
-            <PreviewCard />
-            <EntriesCard />
+            <ServicesCard onMutation={handleSettingsMutation} />
+            <PreviewCard refreshKey={refreshKey} />
+            <EntriesCard refreshKey={refreshKey} />
           </div>
         ) : tab === "settings" ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
-            <SettingsCard />
+            <SettingsCard onMutation={handleSettingsMutation} />
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>

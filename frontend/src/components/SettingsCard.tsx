@@ -88,7 +88,7 @@ function buildUpdate(form: FormState, saved: FormState): SettingsUpdate {
   return update;
 }
 
-export function SettingsCard() {
+export function SettingsCard({ onMutation }: { onMutation?: () => void }) {
   const [savedConfig, setSavedConfig] = useState<SettingsConfig | null>(null);
   const [form, setForm] = useState<FormState>({
     m365Instance: "Worldwide",
@@ -149,6 +149,7 @@ export function SettingsCard() {
       setForm(configToForm(result));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      onMutation?.();
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setSaveError(err.message);
@@ -168,6 +169,7 @@ export function SettingsCard() {
       setForm(configToForm(result));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      onMutation?.();
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setSaveError(err.message);

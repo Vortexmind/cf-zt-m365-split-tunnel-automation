@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { LayerCard, Text, Badge, Button, Table, Loader, Banner, Tooltip } from "@cloudflare/kumo";
-import { FolderOpen, Info } from "@phosphor-icons/react";
+import { ArrowsClockwise, Info } from "@phosphor-icons/react";
 import { fetchEntries } from "../lib/api";
 import type { EntriesResult, SplitTunnelEntry } from "../lib/types";
 
@@ -37,9 +37,9 @@ function EntriesTable({ entries }: { entries: SplitTunnelEntry[] }) {
   );
 }
 
-export function EntriesCard() {
+export function EntriesCard({ refreshKey }: { refreshKey?: number }) {
   const [data, setData] = useState<EntriesResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const handleLoad = useCallback(async () => {
@@ -57,6 +57,8 @@ export function EntriesCard() {
     }
   }, []);
 
+  useEffect(() => { handleLoad(); }, [handleLoad, refreshKey]);
+
   return (
     <LayerCard className="p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -66,13 +68,10 @@ export function EntriesCard() {
             <Info size={14} />
           </Tooltip>
         </div>
-        <Button variant="secondary" icon={FolderOpen} onClick={handleLoad} disabled={loading}>
-          {data ? "Reload" : "Load"}
+        <Button variant="secondary" icon={ArrowsClockwise} onClick={handleLoad} disabled={loading}>
+          Refresh
         </Button>
       </div>
-      {!data && !loading && !error && (
-        <Text variant="secondary">Click Load Configuration to view the active split tunnel exclude list from Cloudflare.</Text>
-      )}
       {loading && <div className="flex items-center gap-2 py-2"><Loader size="base" /><Text variant="secondary">Loading configuration\u2026</Text></div>}
       {error && <Banner variant="error" description={error} />}
       {data && (
