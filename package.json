@@ -20,7 +20,7 @@
     "@cloudflare/vite-plugin": "latest",
     "@cloudflare/vitest-pool-workers": "latest",
     "@phosphor-icons/react": "^2.1.10",
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
