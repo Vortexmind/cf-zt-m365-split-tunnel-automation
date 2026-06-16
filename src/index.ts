@@ -5,7 +5,7 @@ import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { executeSummary } from "./handlers/summary";
-import { PermissionError, CfApiError } from "./cloudflare/client";
+import { PermissionError, CfApiError, listDeviceProfiles } from "./cloudflare/client";
 import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron, loadHistory } from "./state";
 import type { ScheduleState, SettingsOverride } from "./types";
 
@@ -34,11 +34,19 @@ function buildSettingsResponse(env: Env, settingsOverride: SettingsOverride | un
 
   return {
     m365Instance: resolve(settingsOverride?.m365Instance, env.M365_INSTANCE, "Worldwide", identity),
-    m365Categories: resolve(settingsOverride?.m365Categories, env.M365_CATEGORIES, "Optimize,Allow", identity),
+    m365Categories: resolve(settingsOverride?.m365Categories, env.M365_CATEGORIES, "Optimize", identity),
     includeIpv6: resolve(settingsOverride?.includeIpv6, env.INCLUDE_IPV6, true, parseBool),
     includeUrls: resolve(settingsOverride?.includeUrls, env.INCLUDE_URLS, true, parseBool),
-    dryRun: resolve(settingsOverride?.dryRun, env.DRY_RUN, false, parseBool),
+    dryRun: resolve(settingsOverride?.dryRun, env.DRY_RUN, true, parseBool),
     maxEntries: resolve(settingsOverride?.maxEntries, env.MAX_ENTRIES, 1000, parseNum),
+    cfPolicyId: resolve(
+      settingsOverride?.cfPolicyId !== undefined && settingsOverride?.cfPolicyId !== ""
+        ? settingsOverride.cfPolicyId
+        : undefined,
+      env.CF_POLICY_ID,
+      "",
+      identity
+    ),
   };
 }
 
@@ -161,6 +169,21 @@ export default {
         return jsonResponse(result);
       }
 
+      if (request.method === "GET" && path === "/api/profiles") {
+        try {
+          const profiles = await listDeviceProfiles(config.accountId, config.apiToken);
+          return jsonResponse({ profiles });
+        } catch (err) {
+          if (err instanceof PermissionError) {
+            return jsonResponse({ error: err.message }, 403);
+          }
+          if (err instanceof CfApiError) {
+            return jsonResponse({ error: err.message }, 502);
+          }
+          throw err;
+        }
+      }
+
       if (request.method === "POST" && path === "/api/services") {
         let services: string[] | null | undefined;
         try {
@@ -226,6 +249,13 @@ export default {
         if (updates.maxEntries !== undefined) {
           if (typeof updates.maxEntries !== "number" || updates.maxEntries <= 0 || !Number.isInteger(updates.maxEntries)) {
             return jsonResponse({ error: `Invalid maxEntries: must be a positive integer` }, 400);
+          }
+        }
+
+        // Validate cfPolicyId if provided (non-empty string; null/empty clears override)
+        if (updates.cfPolicyId !== undefined && updates.cfPolicyId !== null && updates.cfPolicyId !== "") {
+          if (typeof updates.cfPolicyId !== "string") {
+            return jsonResponse({ error: `Invalid cfPolicyId: must be a string` }, 400);
           }
         }
 

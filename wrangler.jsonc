@@ -25,9 +25,13 @@
 	"kv_namespaces": [
 		{
 			"binding": "STATE",
+			// Replace with your KV namespace ID (run 'npm run setup' or 'npx wrangler kv namespace create STATE')
 			"id": "c5af3b94eb0249519081b99a465b509a"
 		}
 	],
+	// Custom domain required for Cloudflare Access authentication.
+	// Replace with your own domain before deploying. The domain must be added to your Cloudflare account.
+	// If you don't have a custom domain, you can use a workers.dev subdomain by setting workers_dev: true and removing this routes block.
 	"routes": [
 		{
 			"pattern": "m365-split-tunnel.homesecurity.rocks",
@@ -44,7 +48,7 @@
 		// Comma-separated service areas, or "all" for no API-level filter
 		"M365_SERVICES": "all",
 		// Comma-separated categories to include
-		"M365_CATEGORIES": "Optimize,Allow",
+		"M365_CATEGORIES": "Optimize",
 		// Whether to include IPv6 addresses
 		"INCLUDE_IPV6": "true",
 		// Whether to include URL/host entries
@@ -52,7 +56,7 @@
 		// Tag prefix for managed entries
 		"MANAGED_TAG": "[m365-auto]",
 		// If true, compute changes but do not apply them
-		"DRY_RUN": "false",
+		"DRY_RUN": "true",
 		// Maximum number of entries per split tunnel list
 		"MAX_ENTRIES": "1000"
 	}

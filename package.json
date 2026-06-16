@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "setup": "node scripts/setup.mjs"
   },
   "devDependencies": {
     "@cloudflare/kumo": "^2.5.2",

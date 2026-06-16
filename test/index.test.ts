@@ -603,4 +603,49 @@ describe("fetch handler - settings", () => {
     );
     expect(sources).not.toContain("kv");
   });
+
+  it("POST /api/settings with cfPolicyId saves and returns it", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cfPolicyId: "test-policy-id" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.cfPolicyId).toEqual({ value: "test-policy-id", source: "kv" });
+  });
+
+  it("POST /api/settings with cfPolicyId empty string clears the override", async () => {
+    // First set a cfPolicyId
+    const env = createEnv({ "m365:settings": JSON.stringify({ cfPolicyId: "test-policy-id" }) });
+    // Then clear it
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cfPolicyId: "" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.cfPolicyId).toEqual({ value: "", source: "default" });
+  });
+
+  it("POST /api/settings with invalid cfPolicyId type returns 400", async () => {
+    const env = createEnv();
+    const res = await worker.fetch!(
+      makeRequest("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cfPolicyId: 123 }),
+      }),
+      env
+    );
+    expect(res.status).toBe(400);
+  });
 });

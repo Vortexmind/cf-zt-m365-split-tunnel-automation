@@ -79,6 +79,18 @@ export interface ServicesConfig {
   services: string[] | null;
 }
 
+export interface DeviceProfile {
+  policyId: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  match?: string;
+}
+
+export interface ProfilesResponse {
+  profiles: DeviceProfile[];
+}
+
 /** The source of a setting value */
 export type SettingSource = "kv" | "env" | "default";
 
@@ -96,6 +108,7 @@ export interface SettingsConfig {
   includeUrls: SettingDetail<boolean>;
   dryRun: SettingDetail<boolean>;
   maxEntries: SettingDetail<number>;
+  cfPolicyId: SettingDetail<string>;
 }
 
 /** Body for POST /api/settings - only include keys you want to override; omit keys to revert to env/default */
@@ -106,6 +119,7 @@ export interface SettingsUpdate {
   includeUrls?: boolean;
   dryRun?: boolean;
   maxEntries?: number;
+  cfPolicyId?: string;
 }
 
 // History log types (must be kept in sync with src/types.ts)

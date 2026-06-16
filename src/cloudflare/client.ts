@@ -132,6 +132,42 @@ export async function putExcludeEntries(
   return data.result;
 }
 
+export interface DeviceProfile {
+  policyId: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  match?: string;
+}
+
+export async function listDeviceProfiles(
+  accountId: string,
+  apiToken: string
+): Promise<DeviceProfile[]> {
+  const url = `${BASE_URL}/accounts/${accountId}/devices/policies`;
+  const response = await cfGet(url, apiToken);
+
+  if (response.status === 403) {
+    throw new PermissionError(
+      "CF API returned 403 Forbidden. Check that the API token has Zero Trust device policy read permissions."
+    );
+  }
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new CfApiError(response.status, `CF API returned ${response.status}: ${body}`);
+  }
+
+  const data = await response.json() as { result: Array<Record<string, unknown>> };
+  return data.result.map((p) => ({
+    policyId: p.policy_id as string,
+    name: p.name as string,
+    description: p.description as string | undefined,
+    isDefault: !!p.default,
+    match: p.match as string | undefined,
+  }));
+}
+
 export class PermissionError extends Error {
   constructor(message: string) {
     super(message);

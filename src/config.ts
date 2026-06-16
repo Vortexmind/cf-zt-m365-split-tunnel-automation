@@ -71,7 +71,7 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null, settin
     }
   }
 
-  const categoryInput = settingsOverride?.m365Categories !== undefined ? settingsOverride.m365Categories : (env.M365_CATEGORIES || "Optimize,Allow");
+  const categoryInput = settingsOverride?.m365Categories !== undefined ? settingsOverride.m365Categories : (env.M365_CATEGORIES || "Optimize");
   const m365Categories = categoryInput
     .split(",")
     .map((s) => s.trim() as CategoryPriority);
@@ -84,7 +84,9 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null, settin
   }
 
   const includeIpv6 = settingsOverride?.includeIpv6 !== undefined ? settingsOverride.includeIpv6 : parseBoolean(env.INCLUDE_IPV6, true);
-  const policyId = env.CF_POLICY_ID ?? "";
+  const policyId = settingsOverride?.cfPolicyId !== undefined && settingsOverride?.cfPolicyId !== ""
+    ? settingsOverride.cfPolicyId
+    : (env.CF_POLICY_ID ?? "");
 
   return {
     accountId: env.CF_ACCOUNT_ID,
@@ -104,7 +106,7 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null, settin
     includeIpv6,
     includeUrls: settingsOverride?.includeUrls !== undefined ? settingsOverride.includeUrls : parseBoolean(env.INCLUDE_URLS, true),
     managedTag: env.MANAGED_TAG || "[m365-auto]",
-    dryRun: settingsOverride?.dryRun !== undefined ? settingsOverride.dryRun : parseBoolean(env.DRY_RUN, false),
+    dryRun: settingsOverride?.dryRun !== undefined ? settingsOverride.dryRun : parseBoolean(env.DRY_RUN, true),
     maxEntries: settingsOverride?.maxEntries !== undefined ? settingsOverride.maxEntries : parseInteger(env.MAX_ENTRIES, 1000),
     useDefaultProfile: policyId === "",
     m365NoIpv6: !includeIpv6,

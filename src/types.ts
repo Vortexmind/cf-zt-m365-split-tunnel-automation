@@ -123,6 +123,7 @@ export interface SettingsOverride {
   includeUrls?: boolean;
   dryRun?: boolean;
   maxEntries?: number;
+  cfPolicyId?: string;
 }
 
 // History log types

@@ -32,88 +32,79 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 
 ## Setup
 
-1. Clone the repo:
-   ```bash
-   git clone <repo-url> split-tunnel-automation
-   cd split-tunnel-automation
-   ```
+**Step 1: Clone and install**
+```bash
+git clone <repo-url> split-tunnel-automation
+cd split-tunnel-automation
+npm install
+```
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+**Step 2: Configure your domain**
 
-3. Create the KV namespace for state storage:
-   ```bash
-   npx wrangler kv namespace create STATE
-   ```
-   Copy the `id` from the output and update the `kv_namespaces` entry in `wrangler.jsonc`.
+Edit `wrangler.jsonc` and replace `your-worker.your-domain.com` in the `routes` section with your own custom domain. This domain is required for Cloudflare Access authentication. The domain must be added to your Cloudflare account (DNS does not need to be proxied). If you prefer to use a `workers.dev` subdomain instead, set `workers_dev: true` and remove the `routes` block entirely.
 
-4. Generate TypeScript types from your Wrangler config:
-   ```bash
-   npm run cf-typegen
-   ```
-   Re-run this command whenever you change `wrangler.jsonc`.
+**Step 3: Create KV namespace and configure**
+```bash
+npm run setup
+```
+This creates the KV namespace and patches `wrangler.jsonc` with the namespace ID. If you prefer to do this manually, run `npx wrangler kv namespace create STATE` and update the `id` field in `wrangler.jsonc`.
 
-5. Copy `.dev.vars.example` to `.dev.vars` and replace the placeholder values with your own:
-   ```bash
-   cp .dev.vars.example .dev.vars
-   ```
+**Step 4: Generate TypeScript types**
+```bash
+npm run cf-typegen
+```
+Re-run this command whenever you change `wrangler.jsonc`.
 
-6. Test locally:
-   ```bash
-   npm run dev
-   ```
-   Then in another terminal:
-   ```bash
-   curl http://localhost:8787/healthz
-   ```
+**Step 5: Set environment variables**
 
-7. Preview the diff (auth bypassed in local dev with `ACCESS_POLICY_AUD=dev`):
-     ```bash
-     curl http://localhost:8787/api/preview
-     ```
+Copy `.dev.vars.example` to `.dev.vars` and replace the placeholder values:
+```bash
+cp .dev.vars.example .dev.vars
+```
+At minimum, set `CF_API_TOKEN` and `CF_ACCOUNT_ID`. For local development, `ACCESS_TEAM_DOMAIN=dev` and `ACCESS_POLICY_AUD=dev` bypass auth.
 
-8. Set production secrets:
-    ```bash
-    npx wrangler secret put CF_API_TOKEN
-    ```
+**Step 6: Test locally**
+```bash
+npm run dev
+```
+Then visit `http://localhost:8787` to see the dashboard.
 
-9. Configure Cloudflare Access:
-    - Create a Self-hosted Access application for the Worker's hostname
-    - Note the Application AUD tag
-    - Set `ACCESS_TEAM_DOMAIN` and `ACCESS_POLICY_AUD` via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**)
-    - Do not set them via `--var` at deploy time, as this would overwrite them on every subsequent deploy
+**Step 7: Deploy**
 
-10. Set production variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**) or at deploy time with `--var`:
-    ```bash
-    npx wrangler deploy --keep-vars --var CF_ACCOUNT_ID:your_account_id --var CF_POLICY_ID:your_policy_id
-    ```
-    The `--keep-vars` flag ensures that dashboard-set variables are not overwritten on subsequent deploys. The `npm run deploy` script includes `--keep-vars` by default.
+Set production secrets and variables via the Cloudflare dashboard (**Workers & Pages > split-tunnel-automation > Settings > Variables and Secrets**):
 
-11. First deploy with `DRY_RUN` set to `"true"` (via dashboard or `--var DRY_RUN:true`) to validate without writing changes:
-    ```bash
-    npm run deploy
-    ```
+- `CF_API_TOKEN` (secret, required)
+- `CF_ACCOUNT_ID` (required)
+- `ACCESS_TEAM_DOMAIN` (required for Access auth)
+- `ACCESS_POLICY_AUD` (required for Access auth)
 
-12. After validating logs and confirming the diff looks correct, set `DRY_RUN` to `"false"` (via dashboard or `--var DRY_RUN:false`) and redeploy:
-    ```bash
-    npm run deploy
-    ```
+Then deploy:
+```bash
+npm run deploy
+```
+
+**Step 8: Configure Cloudflare Access**
+
+After deploying, visit your Worker's URL. If Access is not yet configured, the dashboard will show a guided checklist to help you set it up. Follow the steps to create an Access application and set the required environment variables.
+
+**Step 9: Verify**
+
+The dashboard loads with Dry Run mode enabled by default. Use the Preview button to see what changes would be applied, then disable Dry Run in Settings when ready.
 
 ## Configuration
 
 | Name | Default | Required | Description |
 |------|---------|----------|-------------|
 | `CF_ACCOUNT_ID` | (none) | Yes | Cloudflare account ID |
-| `CF_POLICY_ID` | (empty) | No | Split tunnel policy ID. When empty, targets the default device profile |
+| `CF_POLICY_ID` | (empty) | No | Split tunnel policy ID. When empty, targets the default device profile. Can also be set from the dashboard via the device-profile picker in Settings |
 | `M365_INSTANCE` | `Worldwide` | No | M365 cloud instance. Options: `Worldwide`, `China`, `USGovDoD`, `USGovGCCHigh` |
 | `M365_SERVICES` | `all` | No | Fallback default for service area filtering when no selection has been saved via the dashboard. Comma-separated service areas to include, or `all` for no filter. Options: `Exchange`, `SharePoint`, `Skype`. The `Common` service area is always included regardless of this setting, as Common endpoints are shared dependencies required by all M365 services. If a selection has been saved via the dashboard (KV key `m365:services`), that value takes priority over this env var. |
-| `M365_CATEGORIES` | `Optimize,Allow` | No | Comma-separated categories to include. Options: `Optimize`, `Allow`, `Default` |
+| `M365_CATEGORIES` | `Optimize` | No | Comma-separated categories to include. Options: `Optimize`, `Allow`, `Default`. Microsoft recommends Optimize-only for VPN split tunneling |
 | `INCLUDE_IPV6` | `true` | No | Whether to include IPv6 addresses in split tunnel entries |
 | `INCLUDE_URLS` | `true` | No | Whether to include URL/host entries in split tunnel entries |
 | `MANAGED_TAG` | `[m365-auto]` | No | Tag prefix used in entry descriptions to identify entries managed by this Worker |
-| `DRY_RUN` | `false` | No | When `true`, compute changes but do not apply them to the Cloudflare API |
+| `DRY_RUN` | `true` | No | When `true`, compute changes but do not apply them to the Cloudflare API. Ships with Dry Run enabled for safe first runs. Disable in the dashboard after verifying the preview |
+| `cfPolicyId` | (none) | No | Dashboard-only override for the device profile to target. When set via the Settings tab, takes priority over `CF_POLICY_ID`. Clear the override to revert to the env var |
 | `MAX_ENTRIES` | `1000` | No | Maximum number of entries per split tunnel list. Sync is aborted if the merged list would exceed this limit |
 | `CF_API_TOKEN` | (none) | Yes (secret) | Cloudflare API token with Zero Trust edit permissions |
 | `ACCESS_TEAM_DOMAIN` | (none) | Yes | Cloudflare Access team domain URL (e.g. `https://your-team.cloudflareaccess.com`). Set via the dashboard only |
@@ -121,7 +112,7 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | `CRON_EXPRESSION` | `17 6 * * *` | No | Cron expression displayed in the dashboard. Must match the `triggers.crons` value in `wrangler.jsonc` |
 | `CRON_DESCRIPTION` | `Daily at 06:17 UTC` | No | Human-readable description of the schedule, displayed in the dashboard |
 
-**Dashboard-configurable settings:** The following settings can be changed at runtime via the Settings tab in the web dashboard, without redeploying: `M365_INSTANCE`, `M365_CATEGORIES`, `INCLUDE_IPV6`, `INCLUDE_URLS`, `DRY_RUN`, `MAX_ENTRIES`. Dashboard-saved values take priority over environment variables. To revert a setting to its environment variable default, remove the override in the Settings tab. Settings that are not exposed in the dashboard (`CF_ACCOUNT_ID`, `CF_POLICY_ID`, `CF_API_TOKEN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_POLICY_AUD`, `MANAGED_TAG`, `CRON_EXPRESSION`, `CRON_DESCRIPTION`) can only be changed by updating environment variables and redeploying.
+**Dashboard-configurable settings:** The following settings can be changed at runtime via the Settings tab in the web dashboard, without redeploying: `M365_INSTANCE`, `M365_CATEGORIES`, `INCLUDE_IPV6`, `INCLUDE_URLS`, `DRY_RUN`, `MAX_ENTRIES`, `cfPolicyId`. Dashboard-saved values take priority over environment variables. To revert a setting to its environment variable default, remove the override in the Settings tab. Settings that are not exposed in the dashboard (`CF_ACCOUNT_ID`, `CF_POLICY_ID`, `CF_API_TOKEN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_POLICY_AUD`, `MANAGED_TAG`, `CRON_EXPRESSION`, `CRON_DESCRIPTION`) can only be changed by updating environment variables and redeploying. Note: `cfPolicyId` is a dashboard-only override; when set, it takes priority over the `CF_POLICY_ID` environment variable.
 
 ## API Endpoints
 
@@ -137,6 +128,7 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | GET | `/api/services` | Yes | Returns `{ services: string[] \| null }` — the currently persisted service area selection (`null` means all services) |
 | POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
 | GET | `/api/services/summary` | Yes | Returns per-service-area entry counts and sample domains from the current M365 endpoint feed |
+| GET | `/api/profiles` | Yes | Lists device profiles available in the account (from the Cloudflare API) |
 | DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
 | GET | `/api/history` | Yes | Returns the run history log (sync and remove operations from the last 30 days) |
@@ -315,6 +307,7 @@ Returns an array of `HistoryEntry` objects, newest first. Entries are automatica
 | `includeUrls` | `{ value: boolean, source: "kv" \| "env" \| "default" }` | Whether URL/host entries are included |
 | `dryRun` | `{ value: boolean, source: "kv" \| "env" \| "default" }` | Whether dry run mode is active |
 | `maxEntries` | `{ value: number, source: "kv" \| "env" \| "default" }` | Maximum entries per split tunnel list |
+| `cfPolicyId` | `{ value: string, source: "kv" \| "env" \| "default" }` | Device profile policy ID. Empty string means the default profile is used |
 
 The `source` field indicates where the effective value comes from: `kv` (saved via dashboard), `env` (from environment variable), or `default` (hardcoded default).
 
@@ -336,6 +329,24 @@ Each `ServiceSummary` object:
 | `entryCount` | number | Number of split tunnel entries for this service area |
 | `sampleDomains` | string[] | Up to 5 sample domain entries from this service area |
 
+### GET /api/profiles response
+
+Returns the list of device profiles available in the Cloudflare account.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profiles` | DeviceProfile[] | List of device profiles |
+
+Each `DeviceProfile` object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `policyId` | string | Policy ID (use as CF_POLICY_ID) |
+| `name` | string | Profile name |
+| `description` | string | Profile description (may be empty) |
+| `isDefault` | boolean | Whether this is the default profile |
+| `match` | string | Wirefilter expression for device matching (may be empty for default profile) |
+
 ### POST /api/settings body
 
 | Field | Type | Description |
@@ -346,6 +357,7 @@ Each `ServiceSummary` object:
 | `includeUrls` | boolean | (optional) Whether to include URL/host entries |
 | `dryRun` | boolean | (optional) Whether to enable dry run mode |
 | `maxEntries` | number | (optional) Maximum entries per split tunnel list (must be a positive integer) |
+| `cfPolicyId` | string | (optional) Device profile policy ID. Empty string or null clears the override |
 
 Only include keys you want to override. Omitted keys will retain their current override (if any). To revert a specific key to its environment variable default, include it with a `null` or empty string value. To revert all settings, send an empty object `{}`.
 
@@ -363,7 +375,7 @@ The dashboard has five cards on the Dashboard tab:
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
 
-The dashboard also has a **Settings** tab with controls for M365 Instance, M365 Categories, Include IPv6, Include URLs, Dry Run, and Max Entries. Changes are saved to KV and take effect on the next sync. Each setting shows its source (Custom, Env, or Default). When Dry Run mode is active, a warning banner is displayed on the Dashboard tab.
+The dashboard also has a **Settings** tab with controls for the device profile, M365 Instance, M365 Categories, Include IPv6, Include URLs, Dry Run, and Max Entries. Changes are saved to KV and take effect on the next sync. Each setting shows its source (Custom, Env, or Default). When Dry Run mode is active, a warning banner is displayed on the Dashboard tab.
 
 The **History** tab shows a chronological log of all sync and remove operations from the last 30 days. Each entry displays the operation type (sync/remove), trigger source (manual/cron), outcome (success, error, skipped, dry run), and a summary of changes or error details. History entries are stored in KV and pruned automatically on each write.
 
@@ -490,6 +502,17 @@ This tool manages only the endpoints published by the [Microsoft 365 IP Address 
 - **Network Connection Status Indicator (NCSI)**: `www.msftconnecttest.com`, used by Windows to determine internet connectivity. If unreachable, Microsoft 365 Apps may fail to activate.
 
 See [Other endpoints not included in the web service](https://learn.microsoft.com/en-us/microsoft-365/enterprise/additional-office365-ip-addresses-and-urls?view=o365-worldwide) for the full list.
+
+## Migration Notes
+
+### Upgrading from pre-v1 defaults
+
+If you are upgrading from a version that shipped with `M365_CATEGORIES=Optimize,Allow` and `DRY_RUN=false` as defaults, and you relied on these defaults (i.e., you never explicitly set these values in your environment variables or dashboard), your deployment will now use the new defaults:
+
+- **M365_CATEGORIES** defaults to `Optimize` (Microsoft-recommended for split tunneling). If you want to include `Allow` category endpoints as before, set `M365_CATEGORIES=Optimize,Allow` in your environment variables or dashboard.
+- **DRY_RUN** defaults to `true` (safe first runs). If you want syncs to apply changes immediately, set `DRY_RUN=false` in your environment variables or dashboard.
+
+If you have explicitly set these values in your environment or dashboard, your configuration is unaffected.
 
 ## Future Enhancements
 

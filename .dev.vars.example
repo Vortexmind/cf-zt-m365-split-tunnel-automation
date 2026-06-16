@@ -13,7 +13,7 @@ ACCESS_POLICY_AUD=dev
 # M365 endpoint configuration
 M365_INSTANCE=Worldwide
 M365_SERVICES=all
-M365_CATEGORIES=Optimize,Allow
+M365_CATEGORIES=Optimize
 
 # Feature flags
 INCLUDE_IPV6=true

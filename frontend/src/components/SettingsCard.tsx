@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { LayerCard, Text, Switch, Button, Banner, Tooltip, Select, Input, Badge } from "@cloudflare/kumo";
 import { Gear, Info, Warning } from "@phosphor-icons/react";
-import { fetchSettings, updateSettings } from "../lib/api";
-import type { SettingsConfig, SettingsUpdate, SettingSource } from "../lib/types";
+import { fetchSettings, updateSettings, fetchProfiles } from "../lib/api";
+import type { SettingsConfig, SettingsUpdate, SettingSource, DeviceProfile } from "../lib/types";
 
 const M365_INSTANCES = [
   { value: "Worldwide", label: "Worldwide" },
@@ -53,6 +53,7 @@ interface FormState {
   includeUrls: boolean;
   dryRun: boolean;
   maxEntries: number;
+  cfPolicyId: string;
 }
 
 function configToForm(config: SettingsConfig): FormState {
@@ -63,6 +64,7 @@ function configToForm(config: SettingsConfig): FormState {
     includeUrls: config.includeUrls.value,
     dryRun: config.dryRun.value,
     maxEntries: config.maxEntries.value,
+    cfPolicyId: config.cfPolicyId.value,
   };
 }
 
@@ -73,6 +75,7 @@ function isDirty(form: FormState, saved: FormState): boolean {
   if (form.includeUrls !== saved.includeUrls) return true;
   if (form.dryRun !== saved.dryRun) return true;
   if (form.maxEntries !== saved.maxEntries) return true;
+  if (form.cfPolicyId !== saved.cfPolicyId) return true;
   return false;
 }
 
@@ -85,6 +88,9 @@ function buildUpdate(form: FormState, saved: FormState): SettingsUpdate {
   if (form.includeUrls !== saved.includeUrls) update.includeUrls = form.includeUrls;
   if (form.dryRun !== saved.dryRun) update.dryRun = form.dryRun;
   if (form.maxEntries !== saved.maxEntries) update.maxEntries = form.maxEntries;
+  if (form.cfPolicyId !== saved.cfPolicyId) {
+    update.cfPolicyId = form.cfPolicyId === "" ? "" : form.cfPolicyId;
+  }
   return update;
 }
 
@@ -97,21 +103,43 @@ export function SettingsCard({ onMutation }: { onMutation?: () => void }) {
     includeUrls: false,
     dryRun: false,
     maxEntries: 100,
+    cfPolicyId: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<DeviceProfile[]>([]);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const config = await fetchSettings();
-      setSavedConfig(config);
-      setForm(configToForm(config));
-    } catch (err) {
-      if (err instanceof Error && err.message !== "Unauthorized") {
-        setSaveError(err.message);
+      const [config, profilesRes] = await Promise.allSettled([
+        fetchSettings(),
+        fetchProfiles(),
+      ]);
+
+      if (config.status === "fulfilled") {
+        setSavedConfig(config.value);
+        setForm(configToForm(config.value));
+      } else {
+        if (config.reason instanceof Error && config.reason.message !== "Unauthorized") {
+          setSaveError(config.reason.message);
+        }
+      }
+
+      if (profilesRes.status === "fulfilled") {
+        setProfiles(profilesRes.value.profiles);
+        setProfilesError(null);
+      } else {
+        setProfiles([]);
+        const err = profilesRes.reason;
+        if (err instanceof Error) {
+          setProfilesError(err.message);
+        } else {
+          setProfilesError("Failed to load device profiles");
+        }
       }
     } finally {
       setLoading(false);
@@ -215,6 +243,75 @@ export function SettingsCard({ onMutation }: { onMutation?: () => void }) {
 
       {!loading && savedConfig && (
         <>
+          {/* Device Profile section */}
+          <div className="mb-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Gear size={14} className="text-kumo-subtle" />
+              <Text DANGEROUS_style={{ fontWeight: 600 }}>Device Profile</Text>
+            </div>
+
+            <div className="flex items-center justify-between py-2.5 border-t border-kumo-hairline">
+              <div className="min-w-0 mr-4">
+                <div className="flex items-center gap-2">
+                  <Text>Profile</Text>
+                  <SourceBadge source={savedConfig.cfPolicyId.source} />
+                </div>
+                {(() => {
+                  const selected = profiles.find((p) => p.policyId === form.cfPolicyId);
+                  if (selected?.description) {
+                    return (
+                      <div className="mt-0.5">
+                        <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
+                          {selected.description}
+                        </Text>
+                      </div>
+                    );
+                  }
+                  if (form.cfPolicyId === "") {
+                    return (
+                      <div className="mt-0.5">
+                        <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
+                          The default device profile will be used for split tunnel configuration
+                        </Text>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+              <div className="shrink-0">
+                {profilesError ? (
+                  <div className="text-right">
+                    <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
+                      {form.cfPolicyId
+                        ? `Policy ID: ${form.cfPolicyId}`
+                        : "Using default profile"}
+                    </Text>
+                    <div className="mt-0.5">
+                      <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", color: "#f97316" }}>
+                        Could not load profiles. Set CF_POLICY_ID in environment variables.
+                      </Text>
+                    </div>
+                  </div>
+                ) : (
+                  <Select
+                    value={form.cfPolicyId}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, cfPolicyId: value as string }))}
+                    aria-label="Device Profile"
+                    size="sm"
+                  >
+                    <Select.Option value="">Default profile</Select.Option>
+                    {profiles.map((profile) => (
+                      <Select.Option key={profile.policyId} value={profile.policyId}>
+                        {profile.name}{profile.isDefault ? " (default)" : ""}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* M365 Endpoints section */}
           <div className="mb-4">
             <div className="flex items-center gap-1.5 mb-2">
