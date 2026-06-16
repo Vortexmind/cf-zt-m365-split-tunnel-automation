@@ -66,7 +66,8 @@ export default {
         !!env.ACCESS_TEAM_DOMAIN &&
         env.ACCESS_POLICY_AUD !== "dev" &&
         env.ACCESS_TEAM_DOMAIN !== "dev";
-      return jsonResponse({ accessConfigured });
+      const accountConfigured = !!env.CF_ACCOUNT_ID && env.CF_ACCOUNT_ID !== "";
+      return jsonResponse({ accessConfigured, accountConfigured });
     }
 
     // Authenticated routes (require auth and config)

@@ -11,6 +11,7 @@ import { ServicesCard } from "./components/ServicesCard";
 import { PreviewCard } from "./components/PreviewCard";
 import { EntriesCard } from "./components/EntriesCard";
 import { AccessUnconfigured } from "./components/AccessUnconfigured";
+import { AccountNotConfigured } from "./components/AccountNotConfigured";
 import { HistoryCard } from "./components/HistoryCard";
 import { SettingsCard } from "./components/SettingsCard";
 
@@ -21,7 +22,7 @@ export function App() {
   useEffect(() => {
     fetchConfigStatus()
       .then(setConfigStatus)
-      .catch(() => setConfigStatus({ accessConfigured: false }))
+      .catch(() => setConfigStatus({ accessConfigured: false, accountConfigured: false }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,6 +38,10 @@ export function App() {
 
   if (configStatus && !configStatus.accessConfigured && !isLocalhost) {
     return <AccessUnconfigured />;
+  }
+
+  if (configStatus && !configStatus.accountConfigured) {
+    return <AccountNotConfigured />;
   }
 
   return <Dashboard />;

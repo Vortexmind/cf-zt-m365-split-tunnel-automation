@@ -72,6 +72,7 @@ export interface PreviewResult {
 
 export interface ConfigStatus {
   accessConfigured: boolean;
+  accountConfigured: boolean;
 }
 
 export interface ServicesConfig {
