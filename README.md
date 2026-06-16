@@ -337,6 +337,22 @@ The Worker uses a tag-based approach to distinguish between entries it owns and 
 - On each sync, the Worker fetches the current split tunnel list from the Cloudflare API, partitions it into managed and preserved entries, replaces the managed entries with fresh M365 data, and merges the two sets back together.
 - The Cloudflare API requires a full list replacement (PUT), so the reconciliation ensures that preserved entries are included verbatim in the PUT payload, preventing data loss.
 
+### Wildcard URL handling
+
+The Microsoft 365 endpoints feed uses wildcard notation that the Cloudflare Split Tunnel API does not accept verbatim. The Worker normalizes these before building the split tunnel list:
+
+| M365 URL pattern | Example | Treatment | Sent to API as |
+|-----------------|---------|-----------|----------------|
+| `*.domain.tld` | `*.sharepoint.com` | Strip leading `*.` | `sharepoint.com` |
+| `*domain.tld` | `*cdn.onenote.net` | Strip leading `*` | `cdn.onenote.net` |
+| `prefix.*.domain.tld` | `autodiscover.*.onmicrosoft.com` | Skip — mid-domain wildcard unsupported | (dropped, warning logged) |
+
+The overwhelming majority of M365 wildcard URLs use the standard `*.` prefix pattern. The only mid-domain wildcard in the live Worldwide feed (`autodiscover.*.onmicrosoft.com`) is already covered by the `*.onmicrosoft.com` entry in the same feed, which normalizes to `onmicrosoft.com`, so dropping it causes no coverage gap.
+
+When a URL is skipped, a `console.warn` is emitted with the original URL. These warnings are visible in Workers Logs and can be used to detect if Microsoft introduces new unsupported patterns in a future feed update.
+
+Cloudflare's Split Tunnel host entries match the domain and all its subdomains, so `sharepoint.com` in the exclude list covers `*.sharepoint.com` traffic as intended.
+
 ## Error Handling
 
 All errors are persisted to KV with a typed reason (`rate_limit`, `permission_denied`, `cf_api`, `fetch_endpoints`, `version_check`, `cf_unknown`, `max_entries_exceeded`) and surfaced in the `/api/status` endpoint. The error is cleared on the next successful sync.
