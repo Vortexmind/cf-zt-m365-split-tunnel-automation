@@ -168,16 +168,20 @@ describe("transformEndpoints", () => {
     expect(mergedEntry!.sourceIds).toContain(20);
   });
 
-  it("preserves wildcard URLs verbatim in the key field", () => {
+  it("strips leading wildcard prefixes from URL keys", () => {
     const result = transformEndpoints(
       sampleData as M365EndpointSet[],
       defaultOptions
     );
 
-    const wildcard = result.find((e) => e.key === "*.protection.outlook.com");
-    expect(wildcard).toBeDefined();
-    expect(wildcard!.type).toBe("host");
-    expect(wildcard!.key).toBe("*.protection.outlook.com");
+    const normalized = result.find((e) => e.key === "protection.outlook.com");
+    expect(normalized).toBeDefined();
+    expect(normalized!.type).toBe("host");
+    expect(normalized!.key).toBe("protection.outlook.com");
+
+    const sharepoint = result.find((e) => e.key === "sharepoint.com");
+    expect(sharepoint).toBeDefined();
+    expect(sharepoint!.key).toBe("sharepoint.com");
   });
 
   it("formats descriptions as managedTag serviceArea/category id=sourceIds", () => {

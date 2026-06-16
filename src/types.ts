@@ -78,10 +78,8 @@ export interface SyncState {
 }
 
 export interface ScheduleState {
-  /** Cron expression for the scheduled trigger (from CRON_EXPRESSION env var) */
+  /** Cron expression for the scheduled trigger (from KV or triggers.crons fallback) */
   cron: string;
-  /** Human-readable schedule description (from CRON_DESCRIPTION env var) */
-  description: string;
   /** Whether the scheduled handler is paused (skips cron runs) */
   paused: boolean;
 }

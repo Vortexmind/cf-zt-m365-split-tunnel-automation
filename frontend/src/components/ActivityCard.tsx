@@ -32,7 +32,7 @@ function FieldRow({ label, tooltip, children }: { label: string; tooltip?: strin
   );
 }
 
-export function ActivityCard() {
+export function ActivityCard({ syncTriggeredAt }: { syncTriggeredAt?: number }) {
   const [data, setData] = useState<SyncState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export function ActivityCard() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, syncTriggeredAt]);
 
   return (
     <LayerCard className="p-4">

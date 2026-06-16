@@ -26,7 +26,6 @@ export interface SyncResult {
 
 export interface ScheduleState {
   cron: string;
-  description: string;
   paused: boolean;
 }
 

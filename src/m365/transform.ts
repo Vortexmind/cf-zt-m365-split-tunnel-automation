@@ -71,8 +71,9 @@ export function transformEndpoints(
     // Extract URL/FQDN entries.
     if (options.includeUrls && endpointSet.urls) {
       for (const url of endpointSet.urls) {
+        const normalized = url.replace(/^\*\.?/, "");
         addEntry(dedupMap, {
-          key: url,
+          key: normalized,
           type: "host",
           category: endpointSet.category,
           serviceArea: endpointSet.serviceArea,

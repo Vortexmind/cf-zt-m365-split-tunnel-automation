@@ -5,7 +5,7 @@ import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
 import { PermissionError, CfApiError } from "./cloudflare/client";
-import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings } from "./state";
+import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron } from "./state";
 import type { ScheduleState, SettingsOverride } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -16,7 +16,6 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 const DEFAULT_CRON = "17 6 * * *";
-const DEFAULT_CRON_DESCRIPTION = "Daily at 06:17 UTC";
 const VALID_SERVICES = ["Exchange", "SharePoint", "Skype"] as const;
 
 function buildSettingsResponse(env: Env, settingsOverride: SettingsOverride | undefined) {
@@ -109,9 +108,8 @@ export default {
 
       if (request.method === "GET" && path === "/api/schedule") {
         const paused = await loadPaused(env.STATE);
-        const cron = env.CRON_EXPRESSION || DEFAULT_CRON;
-        const description = env.CRON_DESCRIPTION || DEFAULT_CRON_DESCRIPTION;
-        const schedule: ScheduleState = { cron, description, paused };
+        const cron = await loadCron(env.STATE) ?? DEFAULT_CRON;
+        const schedule: ScheduleState = { cron, paused };
         return jsonResponse(schedule);
       }
 
@@ -128,9 +126,8 @@ export default {
         }
         await savePaused(env.STATE, paused);
         console.log(JSON.stringify({ event: "schedule.update", paused }));
-        const cron = env.CRON_EXPRESSION || DEFAULT_CRON;
-        const description = env.CRON_DESCRIPTION || DEFAULT_CRON_DESCRIPTION;
-        const schedule: ScheduleState = { cron, description, paused };
+        const cron = await loadCron(env.STATE) ?? DEFAULT_CRON;
+        const schedule: ScheduleState = { cron, paused };
         return jsonResponse(schedule);
       }
 
@@ -248,6 +245,12 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    // Persist the actual cron expression from the trigger (only if not yet stored)
+    const existingCron = await loadCron(env.STATE);
+    if (!existingCron) {
+      await saveCron(env.STATE, controller.cron);
+    }
+
     const paused = await loadPaused(env.STATE);
     if (paused) {
       console.log(JSON.stringify({ event: "scheduled.skipped", reason: "paused" }));

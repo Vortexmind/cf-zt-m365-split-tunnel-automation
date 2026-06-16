@@ -30,8 +30,6 @@ function createEnv(kvOverrides: Record<string, string> = {}, envOverrides: Parti
     MANAGED_TAG: "[m365-auto]",
     DRY_RUN: "false",
     MAX_ENTRIES: "1000",
-    CRON_EXPRESSION: "17 6 * * *",
-    CRON_DESCRIPTION: "Daily at 06:17 UTC",
     ...envOverrides,
   } as Env;
 }
@@ -161,7 +159,7 @@ describe("fetch handler - auth enforcement", () => {
 });
 
 describe("fetch handler - routes with auth", () => {
-  it("GET /api/schedule returns cron, description, and paused state", async () => {
+  it("GET /api/schedule returns cron and paused state", async () => {
     const env = createEnv();
     const res = await worker.fetch!(
       makeRequest("/api/schedule"),
@@ -171,7 +169,6 @@ describe("fetch handler - routes with auth", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toEqual({
       cron: "17 6 * * *",
-      description: "Daily at 06:17 UTC",
       paused: false,
     });
   });
@@ -190,7 +187,6 @@ describe("fetch handler - routes with auth", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toEqual({
       cron: "17 6 * * *",
-      description: "Daily at 06:17 UTC",
       paused: true,
     });
     expect(env.STATE.put).toHaveBeenCalledWith("m365:paused", "true");
@@ -210,7 +206,6 @@ describe("fetch handler - routes with auth", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toEqual({
       cron: "17 6 * * *",
-      description: "Daily at 06:17 UTC",
       paused: false,
     });
     expect(env.STATE.delete).toHaveBeenCalledWith("m365:paused");
@@ -419,6 +414,44 @@ describe("scheduled handler", () => {
     expect(logSpy).toHaveBeenCalledWith(
       JSON.stringify({ event: "scheduled.skipped", reason: "paused" })
     );
+
+    logSpy.mockRestore();
+  });
+
+  it("saves cron to KV on first invocation even when paused", async () => {
+    const env = createEnv({ "m365:paused": "true" });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: "17 6 * * *",
+      noRetry() {},
+    } as ScheduledController;
+
+    await worker.scheduled!(controller, env);
+
+    expect(env.STATE.put).toHaveBeenCalledWith("m365:cron", "17 6 * * *");
+
+    logSpy.mockRestore();
+  });
+
+  it("does not overwrite existing cron in KV", async () => {
+    const env = createEnv({ "m365:paused": "true", "m365:cron": "30 8 * * *" });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: "17 6 * * *",
+      noRetry() {},
+    } as ScheduledController;
+
+    await worker.scheduled!(controller, env);
+
+    // Should NOT have called put with m365:cron since it already exists
+    const cronPutCalls = (env.STATE.put as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call: string[]) => call[0] === "m365:cron"
+    );
+    expect(cronPutCalls).toHaveLength(0);
 
     logSpy.mockRestore();
   });

@@ -7,6 +7,7 @@ const KV_KEYS = {
   LAST_RESULT_SUMMARY: "m365:lastResultSummary",
   LAST_ERROR: "m365:lastError",
   PAUSED: "m365:paused",
+  CRON: "m365:cron",
   SERVICES: "m365:services",
   SETTINGS: "m365:settings",
 } as const;
@@ -88,6 +89,14 @@ export async function savePaused(kv: KVNamespace, paused: boolean): Promise<void
   } else {
     await kv.delete(KV_KEYS.PAUSED);
   }
+}
+
+export async function loadCron(kv: KVNamespace): Promise<string | null> {
+  return await kv.get(KV_KEYS.CRON);
+}
+
+export async function saveCron(kv: KVNamespace, cron: string): Promise<void> {
+  await kv.put(KV_KEYS.CRON, cron);
 }
 
 export function generateClientRequestId(): string {

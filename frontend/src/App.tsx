@@ -46,6 +46,11 @@ function Dashboard() {
   const [colorMode, setColorMode] = useState<ColorMode>(loadMode);
   const [tab, setTab] = useState<"dashboard" | "settings">("dashboard");
   const [dryRunEnabled, setDryRunEnabled] = useState(false);
+  const [syncTriggeredAt, setSyncTriggeredAt] = useState(0);
+
+  const handleSyncComplete = () => {
+    setSyncTriggeredAt(Date.now());
+  };
 
   useEffect(() => {
     fetchSettings()
@@ -137,8 +142,8 @@ function Dashboard() {
               />
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <ActivityCard />
-              <ScheduleCard />
+              <ActivityCard syncTriggeredAt={syncTriggeredAt} />
+              <ScheduleCard onSyncComplete={handleSyncComplete} />
             </div>
             <ServicesCard />
             <PreviewCard />

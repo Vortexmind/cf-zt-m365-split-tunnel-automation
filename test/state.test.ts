@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings } from "../src/state";
+import { loadPaused, savePaused, loadCron, saveCron, loadServices, saveServices, loadSettings, saveSettings } from "../src/state";
 
 function createMockKv(stored: Record<string, string> = {}) {
   const store = { ...stored };
@@ -45,6 +45,28 @@ describe("savePaused", () => {
     const kv = createMockKv();
     await savePaused(kv, false);
     expect(kv.delete).toHaveBeenCalledWith("m365:paused");
+  });
+});
+
+describe("loadCron", () => {
+  it("returns null when KV key is absent", async () => {
+    const kv = createMockKv();
+    const result = await loadCron(kv);
+    expect(result).toBeNull();
+  });
+
+  it("returns the cron string when KV key exists", async () => {
+    const kv = createMockKv({ "m365:cron": "17 6 * * *" });
+    const result = await loadCron(kv);
+    expect(result).toBe("17 6 * * *");
+  });
+});
+
+describe("saveCron", () => {
+  it("calls kv.put with m365:cron and the cron expression", async () => {
+    const kv = createMockKv();
+    await saveCron(kv, "30 8 * * *");
+    expect(kv.put).toHaveBeenCalledWith("m365:cron", "30 8 * * *");
   });
 });
 

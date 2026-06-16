@@ -54,10 +54,6 @@
 		// If true, compute changes but do not apply them
 		"DRY_RUN": "false",
 		// Maximum number of entries per split tunnel list
-		"MAX_ENTRIES": "1000",
-		// Cron expression for the scheduled trigger (informational; also in triggers.crons)
-		"CRON_EXPRESSION": "17 6 * * *",
-		// Human-readable description of the cron schedule
-		"CRON_DESCRIPTION": "Daily at 06:17 UTC"
+		"MAX_ENTRIES": "1000"
 	}
 }

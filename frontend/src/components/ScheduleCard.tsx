@@ -20,7 +20,7 @@ function FieldRow({ label, tooltip, children }: { label: string; tooltip?: strin
   );
 }
 
-export function ScheduleCard() {
+export function ScheduleCard({ onSyncComplete }: { onSyncComplete?: () => void }) {
   const [data, setData] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -59,6 +59,7 @@ export function ScheduleCard() {
     try {
       await forceSync();
       load();
+      onSyncComplete?.();
     } catch {
       // handled
     } finally {
@@ -111,9 +112,7 @@ export function ScheduleCard() {
             <FieldRow label="Cron" tooltip="Standard cron expression for the sync schedule (server-side trigger)">
               <Text variant="mono">{data.cron || "-"}</Text>
             </FieldRow>
-            <FieldRow label="Schedule">
-              <Text variant="secondary">{data.description || "-"}</Text>
-            </FieldRow>
+
             <FieldRow label="State" tooltip="When Paused, the scheduled handler skips execution but manual Sync Now still works">
               {data.paused ? <Badge variant="warning">Paused</Badge> : <Badge variant="success">Active</Badge>}
             </FieldRow>
