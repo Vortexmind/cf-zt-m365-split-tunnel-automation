@@ -138,6 +138,7 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
 | DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
+| GET | `/api/history` | Yes | Returns the run history log (sync and remove operations from the last 30 days) |
 | GET | `/api/settings` | Yes | Returns current settings with effective values and source (KV override, env var, or default) |
 | POST | `/api/settings` | Yes | Save settings overrides. Body: partial JSON with keys to override. Omit keys to revert to env/default |
 
@@ -280,6 +281,29 @@ The optional JSON body supports:
 | `preservedCount` | number | Count of preserved entries |
 | `totalCount` | number | Total count of all entries |
 
+### GET /api/history response
+
+Returns an array of `HistoryEntry` objects, newest first. Entries are automatically pruned after 30 days.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | string | ISO 8601 timestamp of the operation (also serves as the unique key) |
+| `opType` | string | Operation type: `sync` or `remove` |
+| `trigger` | string | How the operation was triggered: `manual` or `cron` (cron only applies to sync) |
+| `outcome` | string | Result: `success`, `error`, `skipped`, or `dry_run` |
+| `version` | string | (sync only) M365 endpoint version |
+| `candidates` | number | (sync only) Number of M365 endpoints matching filters |
+| `added` | number | (sync only) Entries added in this sync |
+| `removed` | number | (sync only) Entries removed in this sync |
+| `managedAfter` | number | (sync only) Managed entries after this sync |
+| `preserved` | number | (sync only) Preserved entries in the list |
+| `dryRun` | boolean | (sync only) Whether dry run mode was active |
+| `removedCount` | number | (remove only) Number of managed entries removed |
+| `preservedCount` | number | (remove only) Number of preserved entries kept |
+| `totalAfter` | number | (remove only) Total entries after removal |
+| `errorType` | string | (error only) Error category (e.g. `permission_denied`, `cf_api`) |
+| `errorMessage` | string | (error only) Human-readable error description |
+
 ### GET /api/settings response
 
 | Field | Type | Description |
@@ -312,15 +336,17 @@ The dashboard is a static single-page application (SPA) served as static assets 
 
 The header includes a Sun/Moon toggle button for switching between light and dark mode. The initial mode is selected from the user's browser or system preference (`prefers-color-scheme`). The selection is persisted in `localStorage`.
 
-The dashboard has five cards:
+The dashboard has five cards on the Dashboard tab:
 
 - **Activity**: Shows last sync time, M365 version, entry counts, dry-run flag, and any errors. Auto-refreshes every 60 seconds.
-- **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Force Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
-- **Services**: Toggle switches for each configurable service area (Exchange, SharePoint, Skype). The Common service area is always included and is shown as a read-only info row. Changes are saved to KV via `POST /api/services` and take effect on the next sync (scheduled or manual). See [Configuring service areas](#configuring-service-areas) below.
+- **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
+- **Services**: Toggle switches for each configurable service area (Exchange, SharePoint, Skype). At least one service must remain selected. The Common service area is always included and is shown as a read-only info row. Changes are saved to KV via `POST /api/services` and take effect on the next sync (scheduled or manual). See [Configuring service areas](#configuring-service-areas) below.
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
 
 The dashboard also has a **Settings** tab with controls for M365 Instance, M365 Categories, Include IPv6, Include URLs, Dry Run, and Max Entries. Changes are saved to KV and take effect on the next sync. Each setting shows its source (Custom, Env, or Default). When Dry Run mode is active, a warning banner is displayed on the Dashboard tab.
+
+The **History** tab shows a chronological log of all sync and remove operations from the last 30 days. Each entry displays the operation type (sync/remove), trigger source (manual/cron), outcome (success, error, skipped, dry run), and a summary of changes or error details. History entries are stored in KV and pruned automatically on each write.
 
 ## Cron Schedule
 
@@ -424,11 +450,9 @@ Edit the `triggers.crons` array in `wrangler.jsonc` and update `CRON_EXPRESSION`
 
 ### Configuring service areas
 
-Use the **Services** card in the dashboard to select which M365 service areas (Exchange, SharePoint, Skype) are included in the split tunnel list. The Common service area is always included and cannot be deselected.
+Use the **Services** card in the dashboard to select which M365 service areas (Exchange, SharePoint, Skype) are included in the split tunnel list. The Common service area is always included and cannot be deselected. At least one service area must remain selected; the last remaining toggle cannot be turned off.
 
 The selection is saved to KV under the key `m365:services` and takes priority over the `M365_SERVICES` environment variable. If no selection has ever been saved via the dashboard, the `M365_SERVICES` env var default is used.
-
-Selecting all three services, or deselecting all (which the dashboard treats as equivalent to all), produces the same result as `M365_SERVICES=all`. When all services are deselected, the dashboard shows a notice: "No services selected — all service areas will be included."
 
 After saving a new selection, trigger a Sync Now or Force Sync, or wait for the next scheduled sync, for the change to take effect.
 
