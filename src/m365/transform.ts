@@ -71,7 +71,14 @@ export function transformEndpoints(
     // Extract URL/FQDN entries.
     if (options.includeUrls && endpointSet.urls) {
       for (const url of endpointSet.urls) {
+        // Strip a leading wildcard prefix ("*." or bare "*").
         const normalized = url.replace(/^\*\.?/, "");
+        // If a wildcard remains (e.g. mid-domain "autodiscover.*.onmicrosoft.com"),
+        // the Cloudflare API will reject it. Skip and warn rather than fail the sync.
+        if (normalized.includes("*")) {
+          console.warn(`Skipping unsupported wildcard URL: ${url}`);
+          continue;
+        }
         addEntry(dedupMap, {
           key: normalized,
           type: "host",

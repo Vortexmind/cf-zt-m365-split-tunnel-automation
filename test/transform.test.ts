@@ -184,6 +184,28 @@ describe("transformEndpoints", () => {
     expect(sharepoint!.key).toBe("sharepoint.com");
   });
 
+  it("skips URLs that contain a wildcard after leading-wildcard normalization", () => {
+    const fixture: M365EndpointSet[] = [
+      {
+        id: 99,
+        serviceArea: "Exchange",
+        category: "Optimize",
+        urls: [
+          "autodiscover.*.onmicrosoft.com", // mid-domain wildcard — must be skipped
+          "outlook.office.com",             // clean domain — must be included
+        ],
+      },
+    ];
+
+    const result = transformEndpoints(fixture, defaultOptions);
+
+    // The mid-domain wildcard is dropped.
+    expect(result.find((e) => e.key.includes("*"))).toBeUndefined();
+    expect(result.find((e) => e.key === "autodiscover.*.onmicrosoft.com")).toBeUndefined();
+    // The clean domain is kept.
+    expect(result.find((e) => e.key === "outlook.office.com")).toBeDefined();
+  });
+
   it("formats descriptions as managedTag serviceArea/category id=sourceIds", () => {
     const result = transformEndpoints(
       sampleData as M365EndpointSet[],
