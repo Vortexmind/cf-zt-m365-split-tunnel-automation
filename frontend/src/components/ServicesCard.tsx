@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { LayerCard, Text, Switch, Button, Banner, Tooltip } from "@cloudflare/kumo";
 import { Info } from "@phosphor-icons/react";
 import { fetchServices, updateServices } from "../lib/api";
+import { toggleService } from "../lib/services-toggle";
 import type { ServicesConfig } from "../lib/types";
 
 const ALL_SERVICES = ["Exchange", "SharePoint", "Skype"] as const;
@@ -58,23 +59,8 @@ export function ServicesCard() {
 
   const savedSelection = savedConfig ? apiToSelection(savedConfig.services) : new Set(ALL_SERVICES);
   const isDirty = !setsEqual(selected, savedSelection);
-  const allSelected = selected.size === ALL_SERVICES.length;
-  const noneSelected = selected.size === 0;
-
-  const handleMasterToggle = (checked: boolean) => {
-    setSelected(checked ? new Set(ALL_SERVICES) : new Set());
-  };
-
   const handleServiceToggle = (service: ServiceName, checked: boolean) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(service);
-      } else {
-        next.delete(service);
-      }
-      return next;
-    });
+    setSelected(prev => toggleService(prev, service, checked));
   };
 
   const handleSave = async () => {
@@ -132,23 +118,6 @@ export function ServicesCard() {
 
       {!loading && (
         <>
-          {/* Master "All services" toggle */}
-          <div className="flex items-center justify-between py-2 border-b border-kumo-hairline mb-1">
-            <div>
-              <Text DANGEROUS_style={{ fontWeight: 600 }}>All services</Text>
-              <div className="mt-0.5">
-                <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
-                  Include endpoints from all service areas
-                </Text>
-              </div>
-            </div>
-            <Switch
-              checked={allSelected}
-              onCheckedChange={handleMasterToggle}
-              aria-label="Toggle all services"
-            />
-          </div>
-
           {/* Individual service toggles */}
           <div className="divide-y divide-kumo-hairline">
             {ALL_SERVICES.map((service) => (
@@ -180,16 +149,6 @@ export function ServicesCard() {
               </Text>
             </div>
           </div>
-
-          {/* Prominent notice when nothing is selected */}
-          {noneSelected && (
-            <Banner
-              variant="alert"
-              title="No services selected"
-              description="When no services are selected, all service areas will be included in the sync — this is equivalent to selecting all services above."
-              className="mt-3"
-            />
-          )}
         </>
       )}
     </LayerCard>

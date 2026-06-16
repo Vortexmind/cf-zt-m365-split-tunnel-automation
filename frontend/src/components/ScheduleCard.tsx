@@ -72,6 +72,7 @@ export function ScheduleCard({ onSyncComplete }: { onSyncComplete?: () => void }
     try {
       await removeManaged();
       load();
+      onSyncComplete?.();
     } catch {
       // handled
     } finally {
@@ -120,7 +121,7 @@ export function ScheduleCard({ onSyncComplete }: { onSyncComplete?: () => void }
         )}
       </div>
       <div className="pt-3 mt-3 border-t border-kumo-hairline flex gap-2 flex-wrap">
-        <Tooltip content="Removes all M365-managed split tunnel entries. Preserved (manually added) entries are kept. The next scheduled sync will re-add M365 entries." render={<span className="inline-flex" />}>
+        <Tooltip content="Removes all M365-managed split tunnel entries immediately. Preserved entries are kept. The next scheduled sync will re-add M365 entries. This is a one-time action; to permanently change which services are synced, use the Services card." render={<span className="inline-flex" />}>
           <Dialog.Root role="alertdialog">
             <Dialog.Trigger render={(props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
               <Button variant="destructive" icon={Trash} disabled={removing} {...props}>
@@ -139,7 +140,7 @@ export function ScheduleCard({ onSyncComplete }: { onSyncComplete?: () => void }
                   <Button variant="secondary" {...props}>Cancel</Button>
                 )} />
                 <Dialog.Close render={(props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-                  <Button variant="destructive" onClick={handleRemove} disabled={removing} {...props}>
+                  <Button variant="destructive" disabled={removing} {...props} onClick={(e) => { props.onClick?.(e); handleRemove(); }}>
                     {removing ? "Removing\u2026" : "Remove Entries"}
                   </Button>
                 )} />
