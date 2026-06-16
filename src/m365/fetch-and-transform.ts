@@ -1,8 +1,13 @@
 import { Config } from "../config";
-import { CandidateEntry } from "../types";
+import { CandidateEntry, M365EndpointSet } from "../types";
 import { loadState, saveState, generateClientRequestId } from "../state";
 import { fetchLatestVersion, fetchEndpoints, RateLimitError } from "./client";
 import { transformEndpoints } from "./transform";
+
+interface EndpointCache {
+  version: string;
+  data: M365EndpointSet[];
+}
 
 const ENDPOINTS_CACHE_KEY = "m365:endpoints:cache";
 const ENDPOINTS_CACHE_TTL = 3600; // 1 hour
@@ -57,9 +62,9 @@ export async function fetchAndTransformEndpoints(
   let endpointSets;
 
   if (useCache) {
-    const cached = await kv.get(ENDPOINTS_CACHE_KEY, "json");
-    if (cached && (cached as any).version === version) {
-      endpointSets = (cached as any).data;
+    const cached = await kv.get<EndpointCache>(ENDPOINTS_CACHE_KEY, "json");
+    if (cached && cached.version === version) {
+      endpointSets = cached.data;
     }
   }
 

@@ -83,7 +83,7 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
     setSelected(prev => toggleService(prev, service, checked));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setSaving(true);
     setSaveSuccess(false);
     setSaveError(null);
@@ -96,10 +96,12 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
       setTimeout(() => setSaveSuccess(false), 3000);
       onMutation?.();
       loadSummary();
+      return true;
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setSaveError(err.message);
       }
+      return false;
     } finally {
       setSaving(false);
     }
@@ -123,13 +125,13 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
             onClick={handleSave}
             disabled={!isDirty || saving || loading}
           >
-            {saving ? "Saving\u2026" : "Save"}
+            {saving ? "Saving…" : "Save"}
           </Button>
           <Button
             variant="secondary"
             onClick={async () => {
-              await handleSave();
-              onSaveAndPreview?.();
+              const ok = await handleSave();
+              if (ok) onSaveAndPreview?.();
             }}
             disabled={!isDirty || saving || loading}
           >
@@ -148,7 +150,7 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
         </div>
       )}
 
-      {loading && <Text variant="secondary">Loading\u2026</Text>}
+      {loading && <Text variant="secondary">{"Loading…"}</Text>}
       {saveSuccess && (
         <Banner
           variant="default"
@@ -164,23 +166,25 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
         <>
           {/* Individual service toggles */}
           <div className="divide-y divide-kumo-hairline">
-            {ALL_SERVICES.map((service) => (
+            {ALL_SERVICES.map((service) => {
+              const summary = getSummary(service);
+              return (
               <div key={service} className="flex items-center justify-between py-2.5">
                 <div>
                   <Text>{SERVICE_LABELS[service]}</Text>
                   <div className="mt-0.5">
                     <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
                       {SERVICE_DESCRIPTIONS[service]}
-                      {getSummary(service) && (
-                        <> &mdash; {getSummary(service)!.entryCount} endpoints</>
+                      {summary && (
+                        <> ({summary.entryCount} endpoints)</>
                       )}
                     </Text>
                   </div>
-                  {getSummary(service) && getSummary(service)!.sampleDomains.length > 0 && (
+                  {summary && summary.sampleDomains.length > 0 && (
                     <div className="mt-0.5">
                       <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
-                        {getSummary(service)!.sampleDomains.join(", ")}
-                        {getSummary(service)!.entryCount > 5 && ", ..."}
+                        {summary.sampleDomains.join(", ")}
+                        {summary.entryCount > 5 && ", ..."}
                       </Text>
                     </div>
                   )}
@@ -191,7 +195,8 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
                   aria-label={`Toggle ${service}`}
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Common always included row */}
@@ -205,19 +210,25 @@ export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: ()
                 <div className="mt-0.5">
                   <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
                     Authentication, Office portal, and shared dependencies needed by every M365 service
-                    {getSummary("Common") && (
-                      <> &mdash; {getSummary("Common")!.entryCount} endpoints</>
-                    )}
+                    {(() => {
+                      const commonSummary = getSummary("Common");
+                      return commonSummary && (
+                        <> ({commonSummary.entryCount} endpoints)</>
+                      );
+                    })()}
                   </Text>
                 </div>
-                {getSummary("Common") && getSummary("Common")!.sampleDomains.length > 0 && (
-                  <div className="mt-0.5">
-                    <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
-                      {getSummary("Common")!.sampleDomains.join(", ")}
-                      {getSummary("Common")!.entryCount > 5 && ", ..."}
-                    </Text>
-                  </div>
-                )}
+                {(() => {
+                  const commonSummary = getSummary("Common");
+                  return commonSummary && commonSummary.sampleDomains.length > 0 && (
+                    <div className="mt-0.5">
+                      <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
+                        {commonSummary.sampleDomains.join(", ")}
+                        {commonSummary.entryCount > 5 && ", ..."}
+                      </Text>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

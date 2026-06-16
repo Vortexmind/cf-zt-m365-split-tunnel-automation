@@ -51,11 +51,11 @@ export function AccessUnconfigured() {
             In the Cloudflare dashboard, go to Workers &amp; Pages, select your Worker, then Settings &gt; Variables and Secrets. Set the following:
           </Text>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: "0.375rem", padding: "0.5rem 0.75rem" }}>
+            <div className="bg-kumo-surface" style={{ borderRadius: "0.375rem", padding: "0.5rem 0.75rem" }}>
               <Text variant="mono" DANGEROUS_style={{ color: "#f97316" }}>ACCESS_TEAM_DOMAIN</Text>
               <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}> = your team domain (e.g., https://your-team.cloudflareaccess.com)</Text>
             </div>
-            <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: "0.375rem", padding: "0.5rem 0.75rem" }}>
+            <div className="bg-kumo-surface" style={{ borderRadius: "0.375rem", padding: "0.5rem 0.75rem" }}>
               <Text variant="mono" DANGEROUS_style={{ color: "#f97316" }}>ACCESS_POLICY_AUD</Text>
               <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}> = the AUD tag from Step 2</Text>
             </div>

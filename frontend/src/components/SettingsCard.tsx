@@ -226,12 +226,12 @@ export function SettingsCard({ onMutation }: { onMutation?: () => void }) {
             Reset to Defaults
           </Button>
           <Button variant="primary" onClick={handleSave} disabled={!dirty || saving || loading}>
-            {saving ? "Saving\u2026" : "Save"}
+            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
 
-      {loading && <Text variant="secondary">Loading\u2026</Text>}
+      {loading && <Text variant="secondary">{"Loading…"}</Text>}
       {saveSuccess && (
         <Banner
           variant="default"

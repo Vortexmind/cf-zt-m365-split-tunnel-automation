@@ -72,7 +72,7 @@ export function EntriesCard({ refreshKey }: { refreshKey?: number }) {
           Refresh
         </Button>
       </div>
-      {loading && <div className="flex items-center gap-2 py-2"><Loader size="base" /><Text variant="secondary">Loading configuration\u2026</Text></div>}
+      {loading && <div className="flex items-center gap-2 py-2"><Loader size="base" /><Text variant="secondary">{"Loading configuration…"}</Text></div>}
       {error && <Banner variant="error" description={error} />}
       {data && (
         <>

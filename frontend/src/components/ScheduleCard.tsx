@@ -87,7 +87,7 @@ export function ScheduleCard({ onDataMutation }: { onDataMutation?: () => void }
             )}
             <Tooltip content="Immediately run a sync against the current M365 endpoint data, regardless of schedule state." render={<span className="inline-flex" />}>
               <Button variant="primary" icon={ArrowsClockwise} onClick={handleForceSync} disabled={syncing}>
-                {syncing ? "Syncing\u2026" : "Sync Now"}
+                {syncing ? "Syncing…" : "Sync Now"}
               </Button>
             </Tooltip>
           </div>
@@ -126,7 +126,7 @@ export function ScheduleCard({ onDataMutation }: { onDataMutation?: () => void }
                 )} />
                 <Dialog.Close render={(props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
                   <Button variant="destructive" disabled={removing} {...props} onClick={(e) => { props.onClick?.(e); handleRemove(); }}>
-                    {removing ? "Removing\u2026" : "Remove Entries"}
+                    {removing ? "Removing…" : "Remove Entries"}
                   </Button>
                 )} />
               </div>

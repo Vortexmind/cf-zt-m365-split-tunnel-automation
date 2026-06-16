@@ -51,7 +51,7 @@ export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
       {!data && !loading && !error && (
         <Text variant="secondary">Click Run Preview to see what the next sync would add or remove — no changes are applied.</Text>
       )}
-      {loading && <div className="flex items-center gap-2 py-2"><Loader size="base" /><Text variant="secondary">Fetching M365 endpoints\u2026</Text></div>}
+      {loading && <div className="flex items-center gap-2 py-2"><Loader size="base" /><Text variant="secondary">{"Fetching M365 endpoints…"}</Text></div>}
       {error && <Banner variant="error" description={error} />}
       {data && (
         <>

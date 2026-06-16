@@ -140,6 +140,8 @@ export interface DeviceProfile {
   match?: string;
 }
 
+// Note: This endpoint does not paginate. Accounts with many device profiles
+// may need pagination support added if the API begins returning paginated results.
 export async function listDeviceProfiles(
   accountId: string,
   apiToken: string

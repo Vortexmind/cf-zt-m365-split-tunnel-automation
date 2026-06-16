@@ -649,3 +649,73 @@ describe("fetch handler - settings", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("fetch handler - services summary", () => {
+  it("GET /api/services/summary returns 200 with data structure when M365 API is mocked", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+      const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+      if (urlStr.includes("/version/")) {
+        return new Response(JSON.stringify([{ instance: "Worldwide", latest: "1234567890" }]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("/endpoints/")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    try {
+      const env = createEnv();
+      const res = await worker.fetch!(makeRequest("/api/services/summary"), env);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.version).toBe("1234567890");
+      expect(Array.isArray(body.services)).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("GET /api/services/summary returns 401 without auth", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(makeRequest("/api/services/summary"), env);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("fetch handler - profiles", () => {
+  it("GET /api/profiles returns 401 without auth", async () => {
+    const env = createEnv({}, {
+      ACCESS_TEAM_DOMAIN: "https://test.cloudflareaccess.com",
+      ACCESS_POLICY_AUD: "real-aud-tag",
+    });
+    const res = await worker.fetch!(makeRequest("/api/profiles"), env);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/profiles returns 502 when CF API is unreachable", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => {
+      return new Response("Bad Gateway", { status: 502 });
+    });
+
+    try {
+      const env = createEnv();
+      const res = await worker.fetch!(makeRequest("/api/profiles"), env);
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(typeof body.error).toBe("string");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

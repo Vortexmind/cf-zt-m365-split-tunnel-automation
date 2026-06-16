@@ -166,6 +166,9 @@ describe("transformEndpoints", () => {
     expect(mergedEntry!.category).toBe("Optimize");
     expect(mergedEntry!.sourceIds).toContain(10);
     expect(mergedEntry!.sourceIds).toContain(20);
+
+    // Verify required and notes fields on merged entry
+    expect(mergedEntry!.required).toBe(true);
   });
 
   it("strips leading wildcard prefixes from URL keys", () => {
@@ -244,5 +247,75 @@ describe("transformEndpoints", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("merges required with OR logic and joins unique notes", () => {
+    const fixture: M365EndpointSet[] = [
+      {
+        id: 10,
+        serviceArea: "Exchange",
+        ips: ["203.0.113.0/24"],
+        category: "Optimize",
+        expressRoute: true,
+        required: true,
+        notes: "Important for mail flow",
+      },
+      {
+        id: 20,
+        serviceArea: "SharePoint",
+        ips: ["203.0.113.0/24"],
+        category: "Optimize",
+        expressRoute: true,
+        required: false,
+        notes: "Important for mail flow",
+      },
+      {
+        id: 30,
+        serviceArea: "Exchange",
+        ips: ["203.0.113.0/24"],
+        category: "Optimize",
+        expressRoute: true,
+        required: false,
+        notes: "Also used by SharePoint",
+      },
+    ];
+
+    const result = transformEndpoints(fixture, defaultOptions);
+    const entry = result.find((e) => e.key === "203.0.113.0/24");
+    expect(entry).toBeDefined();
+    // required=true because at least one source has required=true (OR logic)
+    expect(entry!.required).toBe(true);
+    // Notes are deduplicated and joined with "; "
+    expect(entry!.notes).toBe("Important for mail flow; Also used by SharePoint");
+  });
+
+  it("sets required to undefined when all sources have required=false", () => {
+    const fixture: M365EndpointSet[] = [
+      {
+        id: 10,
+        serviceArea: "Exchange",
+        ips: ["203.0.113.0/24"],
+        category: "Allow",
+        expressRoute: false,
+        required: false,
+      },
+      {
+        id: 20,
+        serviceArea: "SharePoint",
+        ips: ["203.0.113.0/24"],
+        category: "Allow",
+        expressRoute: false,
+        required: false,
+      },
+    ];
+
+    const result = transformEndpoints(fixture, {
+      ...defaultOptions,
+      categories: ["Allow"],
+    });
+    const entry = result.find((e) => e.key === "203.0.113.0/24");
+    expect(entry).toBeDefined();
+    // required is false (OR of all false = false), but transform omits it as undefined
+    expect(entry!.required).toBeUndefined();
   });
 });
