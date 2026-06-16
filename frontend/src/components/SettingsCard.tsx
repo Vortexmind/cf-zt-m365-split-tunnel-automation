@@ -89,7 +89,7 @@ function buildUpdate(form: FormState, saved: FormState): SettingsUpdate {
   if (form.dryRun !== saved.dryRun) update.dryRun = form.dryRun;
   if (form.maxEntries !== saved.maxEntries) update.maxEntries = form.maxEntries;
   if (form.cfPolicyId !== saved.cfPolicyId) {
-    update.cfPolicyId = form.cfPolicyId === "" ? "" : form.cfPolicyId;
+    update.cfPolicyId = form.cfPolicyId;
   }
   return update;
 }

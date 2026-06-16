@@ -89,7 +89,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="bg-kumo-canvas min-h-screen" style={{ color: "#e2e8f0", padding: "1.5rem" }}>
+    <div className="bg-kumo-canvas min-h-screen" style={{ padding: "1.5rem" }}>
       {sessionExpired && (
         <Banner
           variant="error"

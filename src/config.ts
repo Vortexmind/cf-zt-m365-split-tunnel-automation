@@ -14,6 +14,7 @@ export interface Config {
   maxEntries: number;
   useDefaultProfile: boolean;
   m365NoIpv6: boolean;
+  m365TenantName: string;
 }
 
 export const VALID_INSTANCES = ["Worldwide", "China", "USGovDoD", "USGovGCCHigh"] as const;
@@ -110,5 +111,6 @@ export function parseConfig(env: Env, servicesOverride?: string[] | null, settin
     maxEntries: settingsOverride?.maxEntries !== undefined ? settingsOverride.maxEntries : parseInteger(env.MAX_ENTRIES, 1000),
     useDefaultProfile: policyId === "",
     m365NoIpv6: !includeIpv6,
+    m365TenantName: env.M365_TENANT_NAME ?? "",
   };
 }

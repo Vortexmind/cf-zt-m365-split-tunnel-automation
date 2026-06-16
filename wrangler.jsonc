@@ -58,6 +58,8 @@
 		// If true, compute changes but do not apply them
 		"DRY_RUN": "true",
 		// Maximum number of entries per split tunnel list
-		"MAX_ENTRIES": "1000"
+		"MAX_ENTRIES": "1000",
+		// Optional: your M365 tenant name to resolve tenant-specific wildcards (e.g., "contoso")
+		"M365_TENANT_NAME": ""
 	}
 }

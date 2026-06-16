@@ -96,6 +96,7 @@ export function EntriesCard({ refreshKey }: { refreshKey?: number }) {
               <Text variant="secondary" DANGEROUS_style={{ fontWeight: 600, fontSize: "0.8125rem" }}>
                 Managed Entries ({data.managedCount})
               </Text>
+              <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.6875rem", marginLeft: "0.25rem" }}>Replaced on each sync</Text>
               <Tooltip content="Entries whose description starts with the managed tag (e.g. [m365-auto]). Owned by this automation and replaced on each sync." render={<span className="inline-flex cursor-default text-kumo-subtle" />}>
                 <Info size={13} />
               </Tooltip>
@@ -114,6 +115,7 @@ export function EntriesCard({ refreshKey }: { refreshKey?: number }) {
               <Text variant="secondary" DANGEROUS_style={{ fontWeight: 600, fontSize: "0.8125rem" }}>
                 Preserved Entries ({data.preservedCount})
               </Text>
+              <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.6875rem", marginLeft: "0.25rem" }}>Never modified by automation</Text>
               <Tooltip content="Entries without the managed tag. Manually maintained and never modified by the automation." render={<span className="inline-flex cursor-default text-kumo-subtle" />}>
                 <Info size={13} />
               </Tooltip>

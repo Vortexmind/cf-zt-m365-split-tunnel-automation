@@ -24,11 +24,11 @@ function createEnv(kvOverrides: Record<string, string> = {}, envOverrides: Parti
     ACCESS_POLICY_AUD: "dev",
     M365_INSTANCE: "Worldwide",
     M365_SERVICES: "all",
-    M365_CATEGORIES: "Optimize,Allow",
+    M365_CATEGORIES: "Optimize",
     INCLUDE_IPV6: "true",
     INCLUDE_URLS: "true",
     MANAGED_TAG: "[m365-auto]",
-    DRY_RUN: "false",
+    DRY_RUN: "true",
     MAX_ENTRIES: "1000",
     ...envOverrides,
   } as Env;
@@ -511,7 +511,7 @@ describe("fetch handler - settings", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.includeIpv6).toEqual({ value: false, source: "kv" });
-    expect(body.dryRun).toEqual({ value: false, source: "env" });
+    expect(body.dryRun).toEqual({ value: true, source: "env" });
     expect(env.STATE.put).toHaveBeenCalledWith("m365:settings", JSON.stringify({ includeIpv6: false }));
   });
 

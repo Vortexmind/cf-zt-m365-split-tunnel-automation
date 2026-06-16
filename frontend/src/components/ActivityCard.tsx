@@ -68,12 +68,12 @@ export function ActivityCard({ refreshKey }: { refreshKey?: number }) {
                 <Text>{data.lastResultSummary.candidates}</Text>
               </FieldRow>
               <FieldRow label="Entries Added" tooltip="New entries added to the split tunnel list in the last sync">
-                <Text DANGEROUS_style={data.lastResultSummary.added > 0 ? { color: "#6ee7b7" } : {}}>
+                <Text DANGEROUS_style={data.lastResultSummary.added > 0 ? { color: "#22c55e" } : {}}>
                   {data.lastResultSummary.added}
                 </Text>
               </FieldRow>
               <FieldRow label="Entries Removed" tooltip="Entries removed from the split tunnel list in the last sync">
-                <Text DANGEROUS_style={data.lastResultSummary.removed > 0 ? { color: "#f87171" } : {}}>
+                <Text DANGEROUS_style={data.lastResultSummary.removed > 0 ? { color: "#ef4444" } : {}}>
                   {data.lastResultSummary.removed}
                 </Text>
               </FieldRow>

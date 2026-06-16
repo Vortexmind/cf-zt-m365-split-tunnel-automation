@@ -37,6 +37,7 @@ export async function fetchEndpoints(
   options?: {
     serviceAreas?: string[];
     noIpv6?: boolean;
+    tenantName?: string;
   }
 ): Promise<M365EndpointSet[]> {
   let url = `https://endpoints.office.com/endpoints/${instance}?clientRequestId=${clientRequestId}`;
@@ -51,6 +52,10 @@ export async function fetchEndpoints(
 
   if (options?.noIpv6) {
     url += `&NoIPv6=true`;
+  }
+
+  if (options?.tenantName) {
+    url += `&TenantName=${encodeURIComponent(options.tenantName)}`;
   }
 
   const response = await fetchWithTimeout(url, {}, M365_API_TIMEOUT_MS);

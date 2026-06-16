@@ -23,3 +23,6 @@ INCLUDE_URLS=true
 MANAGED_TAG=[m365-auto]
 DRY_RUN=true
 MAX_ENTRIES=1000
+
+# M365 tenant name (optional)
+M365_TENANT_NAME=

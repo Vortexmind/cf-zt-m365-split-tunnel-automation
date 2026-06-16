@@ -4,7 +4,7 @@ const hostname = typeof window !== "undefined" ? window.location.hostname : "";
 
 export function AccessUnconfigured() {
   return (
-    <div className="bg-kumo-canvas min-h-screen flex flex-col items-center justify-center" style={{ color: "#e2e8f0", padding: "2rem" }}>
+    <div className="bg-kumo-canvas min-h-screen flex flex-col items-center justify-center" style={{ padding: "2rem" }}>
       <CloudflareLogo variant="glyph" color="color" style={{ marginBottom: "1.5rem" }} />
       <Text variant="heading2" as="h1" DANGEROUS_style={{ color: "#f97316", marginBottom: "0.5rem" }}>Authorization Required</Text>
       <Text variant="secondary" DANGEROUS_style={{ maxWidth: "560px", textAlign: "center", marginBottom: "1.5rem" }}>

@@ -67,7 +67,7 @@ export async function fetchAndTransformEndpoints(
     endpointSets = await fetchEndpoints(
       config.m365Instance,
       state.clientRequestId,
-      { serviceAreas: config.m365Services, noIpv6: config.m365NoIpv6 }
+      { serviceAreas: config.m365Services, noIpv6: config.m365NoIpv6, tenantName: config.m365TenantName }
     );
 
     // Write to cache (best-effort, don't await)
