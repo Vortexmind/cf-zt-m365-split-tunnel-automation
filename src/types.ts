@@ -51,6 +51,11 @@ export interface CandidateEntry {
   type: "address" | "host";
   description: string;
   category: CategoryPriority;
+  serviceArea: string;
+  /** true if ANY source endpoint set has required=true */
+  required?: boolean;
+  /** Unique non-empty notes from all source endpoint sets, joined with "; " */
+  notes?: string;
   sourceIds: number[];
 }
 

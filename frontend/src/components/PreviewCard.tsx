@@ -83,6 +83,7 @@ export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
                     <Table.Row>
                       <Table.Head>Address / Host</Table.Head>
                       <Table.Head>Type</Table.Head>
+                      <Table.Head>Service</Table.Head>
                       <Table.Head>Description</Table.Head>
                     </Table.Row>
                   </Table.Header>
@@ -91,7 +92,18 @@ export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
                       <Table.Row key={entry.key}>
                         <Table.Cell><Text variant="mono">{entry.key}</Text></Table.Cell>
                         <Table.Cell><Badge variant={entry.type === "address" ? "info" : "secondary"}>{entry.type}</Badge></Table.Cell>
-                        <Table.Cell>{entry.description}</Table.Cell>
+                        <Table.Cell>
+                          {entry.serviceArea && <Badge variant="secondary">{entry.serviceArea}</Badge>}
+                          {entry.required === false && <Badge variant="secondary" className="ml-1">Optional</Badge>}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {entry.description}
+                          {entry.notes && (
+                            <Tooltip content={entry.notes} render={<span className="inline-flex ml-1 text-kumo-subtle cursor-default" />}>
+                              <Info size={14} />
+                            </Tooltip>
+                          )}
+                        </Table.Cell>
                       </Table.Row>
                     ))}
                   </Table.Body>
@@ -112,6 +124,7 @@ export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
                     <Table.Row>
                       <Table.Head>Address / Host</Table.Head>
                       <Table.Head>Type</Table.Head>
+                      <Table.Head>Service</Table.Head>
                       <Table.Head>Description</Table.Head>
                     </Table.Row>
                   </Table.Header>
@@ -120,7 +133,18 @@ export function PreviewCard({ refreshKey }: { refreshKey?: number }) {
                       <Table.Row key={entry.key}>
                         <Table.Cell><Text variant="mono">{entry.key}</Text></Table.Cell>
                         <Table.Cell><Badge variant={entry.type === "address" ? "info" : "secondary"}>{entry.type}</Badge></Table.Cell>
-                        <Table.Cell>{entry.description}</Table.Cell>
+                        <Table.Cell>
+                          {entry.serviceArea && <Badge variant="secondary">{entry.serviceArea}</Badge>}
+                          {entry.required === false && <Badge variant="secondary" className="ml-1">Optional</Badge>}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {entry.description}
+                          {entry.notes && (
+                            <Tooltip content={entry.notes} render={<span className="inline-flex ml-1 text-kumo-subtle cursor-default" />}>
+                              <Info size={14} />
+                            </Tooltip>
+                          )}
+                        </Table.Cell>
                       </Table.Row>
                     ))}
                   </Table.Body>

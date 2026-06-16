@@ -21,11 +21,11 @@ function makePreservedHost(host: string, description: string): SplitTunnelEntry 
 }
 
 function makeCandidateAddress(key: string, description: string): CandidateEntry {
-  return { key, type: "address", description, category: "Optimize", sourceIds: [1] };
+  return { key, type: "address", description, category: "Optimize", serviceArea: "Exchange", sourceIds: [1] };
 }
 
 function makeCandidateHost(key: string, description: string): CandidateEntry {
-  return { key, type: "host", description, category: "Optimize", sourceIds: [1] };
+  return { key, type: "host", description, category: "Optimize", serviceArea: "Exchange", sourceIds: [1] };
 }
 
 describe("reconcile", () => {

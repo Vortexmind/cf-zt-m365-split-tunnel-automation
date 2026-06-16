@@ -1,8 +1,6 @@
 import { Config } from "../config";
-import { SplitTunnelEntry } from "../types";
-import { loadState, saveState, generateClientRequestId } from "../state";
-import { fetchLatestVersion, fetchEndpoints } from "../m365/client";
-import { transformEndpoints } from "../m365/transform";
+import { SplitTunnelEntry, CandidateEntry } from "../types";
+import { fetchAndTransformEndpoints } from "../m365/fetch-and-transform";
 import { getAllExcludeEntries } from "../cloudflare/client";
 import { reconcile } from "../reconcile";
 
@@ -12,63 +10,43 @@ export interface PreviewResult {
   preserved: number;
   managedBefore: number;
   managedAfter: number;
-  added: Array<{ key: string; type: "address" | "host"; description: string }>;
-  removed: Array<{ key: string; type: "address" | "host"; description: string }>;
+  added: Array<{ key: string; type: "address" | "host"; description: string; serviceArea?: string; required?: boolean; notes?: string }>;
+  removed: Array<{ key: string; type: "address" | "host"; description: string; serviceArea?: string; required?: boolean; notes?: string }>;
   toKeep: number;
   totalAfter: number;
   versionWarning?: string;
 }
 
-function toSummary(entry: SplitTunnelEntry): { key: string; type: "address" | "host"; description: string } {
-  if ("address" in entry) {
-    return { key: entry.address, type: "address", description: entry.description ?? "" };
-  }
-  return { key: entry.host, type: "host", description: entry.description ?? "" };
+function toEnrichedSummary(
+  entry: SplitTunnelEntry,
+  candidateLookup: Map<string, CandidateEntry>
+): { key: string; type: "address" | "host"; description: string; serviceArea?: string; required?: boolean; notes?: string } {
+  const key = "address" in entry ? entry.address : entry.host;
+  const type: "address" | "host" = "address" in entry ? "address" : "host";
+  const candidate = candidateLookup.get(key);
+  return {
+    key,
+    type,
+    description: entry.description ?? "",
+    serviceArea: candidate?.serviceArea,
+    required: candidate?.required,
+    notes: candidate?.notes,
+  };
 }
 
 export async function executePreview(
   kv: KVNamespace,
   config: Config
 ): Promise<PreviewResult> {
-  let state = await loadState(kv);
-
-  if (!state.clientRequestId) {
-    state = {
-      ...state,
-      clientRequestId: generateClientRequestId(),
-    };
-    await saveState(kv, { clientRequestId: state.clientRequestId });
-  }
-
-  let version: string;
-  let versionWarning: string | undefined;
-  try {
-    version = await fetchLatestVersion(config.m365Instance, state.clientRequestId);
-  } catch (err) {
-    version = state.lastVersion;
-    versionWarning = `Version check failed: ${String(err)}`;
-  }
-
-  const endpointSets = await fetchEndpoints(
-    config.m365Instance,
-    state.clientRequestId,
-    { serviceAreas: config.m365Services, noIpv6: config.m365NoIpv6 }
-  );
-
-  const candidates = transformEndpoints(endpointSets, {
-    services: config.m365Services,
-    categories: config.m365Categories,
-    includeIpv6: config.includeIpv6,
-    includeUrls: config.includeUrls,
-    managedTag: config.managedTag,
-  });
+  const { version, versionWarning, candidates } = await fetchAndTransformEndpoints(kv, config);
 
   const currentEntries = await getAllExcludeEntries(config.accountId, config.policyId, config.apiToken);
 
   const reconcileResult = reconcile(currentEntries, candidates, config.managedTag);
 
-  const added = reconcileResult.added.map(toSummary);
-  const removed = reconcileResult.removed.map(toSummary);
+  const candidateLookup = new Map(candidates.map(c => [c.key, c]));
+  const added = reconcileResult.added.map(e => toEnrichedSummary(e, candidateLookup));
+  const removed = reconcileResult.removed.map(e => toEnrichedSummary(e, candidateLookup));
 
   return {
     version,

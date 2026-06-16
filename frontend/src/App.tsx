@@ -60,6 +60,10 @@ function Dashboard() {
       .catch(() => {});
   };
 
+  const handleSaveAndPreview = () => {
+    setTab("dashboard");
+  };
+
   useEffect(() => {
     fetchSettings()
       .then((config) => setDryRunEnabled(config.dryRun.value))
@@ -154,16 +158,20 @@ function Dashboard() {
                 className="mb-0"
               />
             )}
+            <Banner
+              variant="default"
+              description="Endpoints listed here bypass the Cloudflare WARP tunnel and connect directly to Microsoft. Use the Settings tab to control which M365 services are included."
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <ActivityCard refreshKey={refreshKey} />
               <ScheduleCard onDataMutation={handleDataMutation} />
             </div>
-            <ServicesCard onMutation={handleSettingsMutation} />
             <PreviewCard refreshKey={refreshKey} />
             <EntriesCard refreshKey={refreshKey} />
           </div>
         ) : tab === "settings" ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.25rem" }}>
+            <ServicesCard onMutation={handleSettingsMutation} onSaveAndPreview={handleSaveAndPreview} />
             <SettingsCard onMutation={handleSettingsMutation} />
           </div>
         ) : (

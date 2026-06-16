@@ -1,8 +1,8 @@
 import { Config } from "../config";
 import { SyncResult, SyncState, HistoryTrigger, HistoryEntry } from "../types";
-import { loadState, saveState, generateClientRequestId, appendHistory } from "../state";
-import { fetchLatestVersion, fetchEndpoints, RateLimitError } from "../m365/client";
-import { transformEndpoints } from "../m365/transform";
+import { loadState, saveState, appendHistory } from "../state";
+import { RateLimitError } from "../m365/client";
+import { fetchAndTransformEndpoints } from "../m365/fetch-and-transform";
 import { getAllExcludeEntries, putExcludeEntries, PermissionError, CfApiError } from "../cloudflare/client";
 import { reconcile } from "../reconcile";
 
@@ -36,60 +36,16 @@ export async function executeSync(
     return buildErrorResult("Failed to load state", isDryRun);
   }
 
-  if (!state.clientRequestId) {
-    state.clientRequestId = generateClientRequestId();
-    await saveState(kv, { clientRequestId: state.clientRequestId });
-  }
-
-  let latestVersion: string | undefined;
+  let fetchResult;
   try {
-    latestVersion = await fetchLatestVersion(config.m365Instance, state.clientRequestId);
-    console.log(JSON.stringify({ event: "sync.start", latest: latestVersion, lastVersion: state.lastVersion, force }));
-
-    if (!force && latestVersion <= state.lastVersion) {
-      const upToDateResult: SyncResult = {
-        version: state.lastVersion,
-        services: config.m365Services ?? ["all"],
-        categories: config.m365Categories,
-        candidates: 0,
-        managedBefore: 0,
-        managedAfter: 0,
-        preserved: 0,
-        added: 0,
-        removed: 0,
-        dryRun: isDryRun,
-        timestamp: new Date().toISOString(),
-      };
-      await appendHistory(kv, { timestamp: new Date().toISOString(), opType: "sync", trigger, outcome: "skipped", version: state.lastVersion });
-      return upToDateResult;
-    }
+    fetchResult = await fetchAndTransformEndpoints(kv, config, {
+      useCache: false,
+      skipIfUpToDate: force ? undefined : state.lastVersion,
+      throwOnRateLimit: true,
+    });
   } catch (err) {
     if (err instanceof RateLimitError) {
-      console.log(JSON.stringify({ event: "sync.error", step: "versionCheck", error: err.message }));
-      await persistError("rate_limit", err.message);
-      await appendHistory(kv, { timestamp: new Date().toISOString(), opType: "sync", trigger, outcome: "error", errorType: "rate_limit", errorMessage: err.message });
-      return buildErrorResult(err.message, isDryRun);
-    }
-    if (!force) {
-      console.log(JSON.stringify({ event: "sync.error", step: "versionCheck", error: String(err) }));
-      await persistError("version_check", String(err));
-      await appendHistory(kv, { timestamp: new Date().toISOString(), opType: "sync", trigger, outcome: "error", errorType: "version_check", errorMessage: String(err) });
-      return buildErrorResult(`Version check failed: ${String(err)}`, isDryRun);
-    }
-    console.log(JSON.stringify({ event: "sync.start", force: true, versionCheckError: String(err) }));
-  }
-
-  let endpointSets;
-  try {
-    endpointSets = await fetchEndpoints(
-      config.m365Instance,
-      state.clientRequestId,
-      { serviceAreas: config.m365Services, noIpv6: config.m365NoIpv6 }
-    );
-    console.log(JSON.stringify({ event: "sync.fetch", endpointCount: endpointSets.length }));
-  } catch (err) {
-    if (err instanceof RateLimitError) {
-      console.log(JSON.stringify({ event: "sync.error", step: "fetchEndpoints", error: err.message }));
+      console.log(JSON.stringify({ event: "sync.error", step: "rateLimit", error: err.message }));
       await persistError("rate_limit", err.message);
       await appendHistory(kv, { timestamp: new Date().toISOString(), opType: "sync", trigger, outcome: "error", errorType: "rate_limit", errorMessage: err.message });
       return buildErrorResult(err.message, isDryRun);
@@ -100,13 +56,30 @@ export async function executeSync(
     return buildErrorResult(`Fetch endpoints failed: ${String(err)}`, isDryRun);
   }
 
-  const candidates = transformEndpoints(endpointSets, {
-    services: config.m365Services,
-    categories: config.m365Categories,
-    includeIpv6: config.includeIpv6,
-    includeUrls: config.includeUrls,
-    managedTag: config.managedTag,
-  });
+  if (fetchResult.skipped) {
+    console.log(JSON.stringify({ event: "sync.start", latest: fetchResult.version, lastVersion: state.lastVersion, force }));
+    const upToDateResult: SyncResult = {
+      version: state.lastVersion,
+      services: config.m365Services ?? ["all"],
+      categories: config.m365Categories,
+      candidates: 0,
+      managedBefore: 0,
+      managedAfter: 0,
+      preserved: 0,
+      added: 0,
+      removed: 0,
+      dryRun: isDryRun,
+      timestamp: new Date().toISOString(),
+    };
+    await appendHistory(kv, { timestamp: new Date().toISOString(), opType: "sync", trigger, outcome: "skipped", version: state.lastVersion });
+    return upToDateResult;
+  }
+
+  const { version: latestVersion, candidates, versionWarning } = fetchResult;
+  console.log(JSON.stringify({ event: "sync.start", latest: latestVersion, lastVersion: state.lastVersion, force }));
+  if (versionWarning) {
+    console.log(JSON.stringify({ event: "sync.versionWarning", warning: versionWarning }));
+  }
   console.log(JSON.stringify({ event: "sync.transform", candidateCount: candidates.length }));
 
   let currentEntries;

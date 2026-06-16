@@ -4,6 +4,7 @@ import { executeSync } from "./handlers/sync";
 import { executePreview } from "./handlers/preview";
 import { executeRemove } from "./handlers/remove";
 import { executeEntries } from "./handlers/entries";
+import { executeSummary } from "./handlers/summary";
 import { PermissionError, CfApiError } from "./cloudflare/client";
 import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron, loadHistory } from "./state";
 import type { ScheduleState, SettingsOverride } from "./types";
@@ -153,6 +154,11 @@ export default {
 
       if (request.method === "GET" && path === "/api/services") {
         return jsonResponse({ services: servicesOverride === undefined ? null : servicesOverride });
+      }
+
+      if (request.method === "GET" && path === "/api/services/summary") {
+        const result = await executeSummary(env.STATE, config);
+        return jsonResponse(result);
       }
 
       if (request.method === "POST" && path === "/api/services") {

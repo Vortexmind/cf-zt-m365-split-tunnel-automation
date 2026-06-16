@@ -15,7 +15,7 @@ const M365_CATEGORIES = ["Optimize", "Allow", "Default"] as const;
 type CategoryName = typeof M365_CATEGORIES[number];
 
 const CATEGORY_DESCRIPTIONS: Record<CategoryName, string> = {
-  Optimize: "High-priority endpoints for network optimization (e.g., Exchange, Teams real-time traffic)",
+  Optimize: "Microsoft-recommended for split tunneling. High-priority endpoints for network optimization (e.g., Exchange, Teams real-time traffic)",
   Allow: "Endpoints that should have network connectivity but are less sensitive to latency",
   Default: "Endpoints that can be handled with standard internet egress; no special optimization needed",
 };
@@ -263,7 +263,10 @@ export function SettingsCard({ onMutation }: { onMutation?: () => void }) {
                 {M365_CATEGORIES.map((category) => (
                   <div key={category} className="flex items-center justify-between py-2.5 pl-3">
                     <div className="min-w-0 mr-4">
-                      <Text>{category}</Text>
+                      <div className="flex items-center gap-2">
+                        <Text>{category}</Text>
+                        {category === "Optimize" && <Badge variant="success">Recommended</Badge>}
+                      </div>
                       <div className="mt-0.5">
                         <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
                           {CATEGORY_DESCRIPTIONS[category]}

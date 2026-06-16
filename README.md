@@ -136,6 +136,7 @@ Tag-based ownership uses the `[m365-auto]` prefix in entry descriptions (configu
 | POST | `/api/schedule` | Yes | Update the schedule pause state |
 | GET | `/api/services` | Yes | Returns `{ services: string[] \| null }` — the currently persisted service area selection (`null` means all services) |
 | POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
+| GET | `/api/services/summary` | Yes | Returns per-service-area entry counts and sample domains from the current M365 endpoint feed |
 | DELETE | `/api/managed` | Yes | Remove all M365-managed entries from the split tunnel exclude list, preserving non-managed entries |
 | GET | `/api/entries` | Yes | Fetch the current split tunnel exclude list, partitioned into managed and preserved entries |
 | GET | `/api/history` | Yes | Returns the run history log (sync and remove operations from the last 30 days) |
@@ -317,6 +318,24 @@ Returns an array of `HistoryEntry` objects, newest first. Entries are automatica
 
 The `source` field indicates where the effective value comes from: `kv` (saved via dashboard), `env` (from environment variable), or `default` (hardcoded default).
 
+### GET /api/services/summary response
+
+Returns a summary of M365 endpoints grouped by service area.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | M365 endpoint data version |
+| `versionWarning` | string | Warning if version check failed (omitted on success) |
+| `services` | ServiceSummary[] | Per-service-area summary |
+
+Each `ServiceSummary` object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `serviceArea` | string | Service area name: `Common`, `Exchange`, `SharePoint`, or `Skype` |
+| `entryCount` | number | Number of split tunnel entries for this service area |
+| `sampleDomains` | string[] | Up to 5 sample domain entries from this service area |
+
 ### POST /api/settings body
 
 | Field | Type | Description |
@@ -461,6 +480,16 @@ After saving a new selection, trigger a Sync Now or Force Sync, or wait for the 
 Use the dashboard's "Remove Managed" button or `DELETE /api/managed`. This removes all M365-managed entries from the split tunnel exclude list while preserving manually-added or third-party entries. After removal, the next scheduled sync (or force sync) will re-fetch and re-apply the latest M365 endpoints.
 
 Note: If a scheduled sync runs immediately after a remove operation (before the KV state update propagates), the managed entries may be re-added. This is unlikely with a daily cron schedule but can occur if a force sync is triggered manually right after removal.
+
+### Feed coverage limitations
+
+This tool manages only the endpoints published by the [Microsoft 365 IP Address and URL web service](https://learn.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-ip-web-service?view=o365-worldwide). The following endpoints are **not** included in the feed and must be managed manually (added as preserved entries) if required:
+
+- **Teams mobile push notifications**: Firebase Cloud Messaging (FCM) and Apple Push Notification service (APNs) endpoints used for incoming call alerts and message notifications on mobile devices.
+- **Trusted Sites**: FQDNs that must be added to Internet Explorer or Microsoft Edge Trusted Sites zones for Teams, SharePoint, and Viva Engage.
+- **Network Connection Status Indicator (NCSI)**: `www.msftconnecttest.com`, used by Windows to determine internet connectivity. If unreachable, Microsoft 365 Apps may fail to activate.
+
+See [Other endpoints not included in the web service](https://learn.microsoft.com/en-us/microsoft-365/enterprise/additional-office365-ip-addresses-and-urls?view=o365-worldwide) for the full list.
 
 ## Future Enhancements
 

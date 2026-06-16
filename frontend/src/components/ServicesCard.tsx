@@ -1,17 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
-import { LayerCard, Text, Switch, Button, Banner, Tooltip } from "@cloudflare/kumo";
+import { LayerCard, Text, Switch, Button, Banner, Badge, Tooltip } from "@cloudflare/kumo";
 import { Info } from "@phosphor-icons/react";
-import { fetchServices, updateServices } from "../lib/api";
+import { fetchServices, updateServices, fetchServicesSummary } from "../lib/api";
 import { toggleService } from "../lib/services-toggle";
-import type { ServicesConfig } from "../lib/types";
+import type { ServicesConfig, ServicesSummaryResponse, ServiceSummary } from "../lib/types";
 
 const ALL_SERVICES = ["Exchange", "SharePoint", "Skype"] as const;
 type ServiceName = typeof ALL_SERVICES[number];
 
+const SERVICE_LABELS: Record<ServiceName, string> = {
+  Exchange: "Exchange Online (Outlook, email)",
+  SharePoint: "SharePoint Online & OneDrive",
+  Skype: "Microsoft Teams / Skype",
+};
+
 const SERVICE_DESCRIPTIONS: Record<ServiceName, string> = {
-  Exchange: "Email, calendaring, and contacts (Exchange Online)",
-  SharePoint: "SharePoint Online and OneDrive",
-  Skype: "Microsoft Teams and Skype for Business",
+  Exchange: "Email, calendaring, and contacts",
+  SharePoint: "Document collaboration and cloud storage",
+  Skype: "Real-time communication and meetings",
 };
 
 /** Convert API value to UI selection set. null means all three selected. */
@@ -32,13 +38,14 @@ function setsEqual(a: Set<ServiceName>, b: Set<ServiceName>): boolean {
   return true;
 }
 
-export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
+export function ServicesCard({ onMutation, onSaveAndPreview }: { onMutation?: () => void; onSaveAndPreview?: () => void }) {
   const [savedConfig, setSavedConfig] = useState<ServicesConfig | null>(null);
   const [selected, setSelected] = useState<Set<ServiceName>>(new Set(ALL_SERVICES));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<ServicesSummaryResponse | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,7 +62,20 @@ export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadSummary = useCallback(async () => {
+    try {
+      const result = await fetchServicesSummary();
+      setSummary(result);
+    } catch {
+      // Non-critical; summary is optional enrichment
+    }
+  }, []);
+
+  useEffect(() => { load(); loadSummary(); }, [load, loadSummary]);
+
+  function getSummary(serviceArea: string): ServiceSummary | undefined {
+    return summary?.services.find(s => s.serviceArea === serviceArea);
+  }
 
   const savedSelection = savedConfig ? apiToSelection(savedConfig.services) : new Set(ALL_SERVICES);
   const isDirty = !setsEqual(selected, savedSelection);
@@ -75,6 +95,7 @@ export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       onMutation?.();
+      loadSummary();
     } catch (err) {
       if (err instanceof Error && err.message !== "Unauthorized") {
         setSaveError(err.message);
@@ -96,14 +117,36 @@ export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
             <Info size={14} />
           </Tooltip>
         </div>
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          disabled={!isDirty || saving || loading}
-        >
-          {saving ? "Saving\u2026" : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={!isDirty || saving || loading}
+          >
+            {saving ? "Saving\u2026" : "Save"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              await handleSave();
+              onSaveAndPreview?.();
+            }}
+            disabled={!isDirty || saving || loading}
+          >
+            Save & Preview
+          </Button>
+        </div>
       </div>
+
+      {!loading && (
+        <div className="mb-3">
+          <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
+            Select which M365 services to exclude from the WARP tunnel. Excluded endpoints
+            bypass Cloudflare and connect directly to Microsoft. Changes take effect on the
+            next sync.
+          </Text>
+        </div>
+      )}
 
       {loading && <Text variant="secondary">Loading\u2026</Text>}
       {saveSuccess && (
@@ -124,12 +167,23 @@ export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
             {ALL_SERVICES.map((service) => (
               <div key={service} className="flex items-center justify-between py-2.5">
                 <div>
-                  <Text>{service}</Text>
+                  <Text>{SERVICE_LABELS[service]}</Text>
                   <div className="mt-0.5">
                     <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
                       {SERVICE_DESCRIPTIONS[service]}
+                      {getSummary(service) && (
+                        <> &mdash; {getSummary(service)!.entryCount} endpoints</>
+                      )}
                     </Text>
                   </div>
+                  {getSummary(service) && getSummary(service)!.sampleDomains.length > 0 && (
+                    <div className="mt-0.5">
+                      <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
+                        {getSummary(service)!.sampleDomains.join(", ")}
+                        {getSummary(service)!.entryCount > 5 && ", ..."}
+                      </Text>
+                    </div>
+                  )}
                 </div>
                 <Switch
                   checked={selected.has(service)}
@@ -140,14 +194,31 @@ export function ServicesCard({ onMutation }: { onMutation?: () => void }) {
             ))}
           </div>
 
-          {/* Common info row */}
-          <div className="mt-2 pt-2 border-t border-kumo-hairline">
-            <div className="flex items-start gap-2">
-              <Info size={14} className="mt-0.5 shrink-0 text-kumo-subtle" />
-              <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
-                <strong>Common</strong> endpoints are always included regardless of the selection above.
-                Common contains shared dependencies required by all M365 services.
-              </Text>
+          {/* Common always included row */}
+          <div className="mt-3 pt-3 border-t border-kumo-hairline">
+            <div className="flex items-center justify-between py-2.5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Text DANGEROUS_style={{ fontWeight: 600 }}>Common (always included)</Text>
+                  <Badge variant="secondary">Required</Badge>
+                </div>
+                <div className="mt-0.5">
+                  <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.8125rem" }}>
+                    Authentication, Office portal, and shared dependencies needed by every M365 service
+                    {getSummary("Common") && (
+                      <> &mdash; {getSummary("Common")!.entryCount} endpoints</>
+                    )}
+                  </Text>
+                </div>
+                {getSummary("Common") && getSummary("Common")!.sampleDomains.length > 0 && (
+                  <div className="mt-0.5">
+                    <Text variant="secondary" DANGEROUS_style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>
+                      {getSummary("Common")!.sampleDomains.join(", ")}
+                      {getSummary("Common")!.entryCount > 5 && ", ..."}
+                    </Text>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>

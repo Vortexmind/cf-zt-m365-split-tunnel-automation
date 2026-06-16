@@ -22,6 +22,8 @@ interface InternalEntry {
   category: CategoryPriority;
   serviceArea: string;
   sourceIds: number[];
+  required: boolean;
+  notes: string[]; // collected from all source sets
 }
 
 /**
@@ -64,6 +66,8 @@ export function transformEndpoints(
           category: endpointSet.category,
           serviceArea: endpointSet.serviceArea,
           sourceIds: [endpointSet.id],
+          required: endpointSet.required ?? false,
+          notes: endpointSet.notes ? [endpointSet.notes] : [],
         });
       }
     }
@@ -85,6 +89,8 @@ export function transformEndpoints(
           category: endpointSet.category,
           serviceArea: endpointSet.serviceArea,
           sourceIds: [endpointSet.id],
+          required: endpointSet.required ?? false,
+          notes: endpointSet.notes ? [endpointSet.notes] : [],
         });
       }
     }
@@ -99,7 +105,10 @@ export function transformEndpoints(
       key: internal.key,
       type: internal.type,
       category: internal.category,
+      serviceArea: internal.serviceArea,
       description: `${options.managedTag} ${internal.serviceArea}/${internal.category} id=${internal.sourceIds.join(",")}`,
+      required: internal.required || undefined,  // omit if false to keep response clean
+      notes: internal.notes.length > 0 ? internal.notes.join("; ") : undefined,
       sourceIds: internal.sourceIds,
     };
 
@@ -122,7 +131,7 @@ export function transformEndpoints(
  *
  * - If the key does not exist, insert it.
  * - If the new entry has higher priority (lower number), replace the existing entry.
- * - If same priority, merge sourceIds.
+ * - If same priority, merge sourceIds, required (OR), and notes (unique).
  * - If lower priority, skip.
  */
 function addEntry(
@@ -143,9 +152,11 @@ function addEntry(
     // New entry has higher priority; replace.
     dedupMap.set(entry.key, entry);
   } else if (newPrio === existingPrio) {
-    // Same priority; merge sourceIds.
+    // Same priority; merge sourceIds, required, and notes.
     const mergedIds = [...new Set([...existing.sourceIds, ...entry.sourceIds])];
-    dedupMap.set(entry.key, { ...existing, sourceIds: mergedIds });
+    const mergedRequired = existing.required || entry.required;
+    const mergedNotes = [...new Set([...existing.notes, ...entry.notes])];
+    dedupMap.set(entry.key, { ...existing, sourceIds: mergedIds, required: mergedRequired, notes: mergedNotes });
   }
   // If new priority is lower, skip (keep existing).
 }

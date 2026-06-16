@@ -63,8 +63,8 @@ export interface PreviewResult {
   preserved: number;
   managedBefore: number;
   managedAfter: number;
-  added: Array<{ key: string; type: "address" | "host"; description: string }>;
-  removed: Array<{ key: string; type: "address" | "host"; description: string }>;
+  added: Array<{ key: string; type: "address" | "host"; description: string; serviceArea?: string; required?: boolean; notes?: string }>;
+  removed: Array<{ key: string; type: "address" | "host"; description: string; serviceArea?: string; required?: boolean; notes?: string }>;
   toKeep: number;
   totalAfter: number;
   versionWarning?: string;
@@ -130,4 +130,16 @@ export interface HistoryEntry {
   totalAfter?: number;
   errorType?: string;
   errorMessage?: string;
+}
+
+export interface ServiceSummary {
+  serviceArea: string;
+  entryCount: number;
+  sampleDomains: string[];
+}
+
+export interface ServicesSummaryResponse {
+  version: string;
+  versionWarning?: string;
+  services: ServiceSummary[];
 }
