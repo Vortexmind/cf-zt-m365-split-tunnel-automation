@@ -4,6 +4,16 @@ import { Pause, Play, ArrowsClockwise, Trash, Info } from "@phosphor-icons/react
 import { fetchSchedule, updateSchedule, forceSync, removeManaged } from "../lib/api";
 import type { ScheduleState } from "../lib/types";
 import { FieldRow } from "./FieldRow";
+import { formatDate } from "../lib/utils";
+
+function cronOutcomeBadge(outcome: string): { label: string; variant: "success" | "secondary" | "warning" | "info" } {
+  switch (outcome) {
+    case "success":  return { label: "Completed", variant: "success" };
+    case "skipped":  return { label: "Up to date", variant: "info" };
+    case "dry_run":  return { label: "Dry run", variant: "warning" };
+    default:         return { label: "Failed", variant: "secondary" };
+  }
+}
 
 export function ScheduleCard({ onDataMutation }: { onDataMutation?: () => void }) {
   const [data, setData] = useState<ScheduleState | null>(null);
@@ -102,6 +112,22 @@ export function ScheduleCard({ onDataMutation }: { onDataMutation?: () => void }
             <FieldRow label="State" tooltip="When Paused, the scheduled handler skips execution but manual Sync Now still works">
               {data.paused ? <Badge variant="warning">Paused</Badge> : <Badge variant="success">Active</Badge>}
             </FieldRow>
+
+            {data.lastCronRun && (() => {
+              const badge = cronOutcomeBadge(data.lastCronRun!.outcome);
+              const versionSuffix = data.lastCronRun!.version ? ` (v${data.lastCronRun!.version})` : "";
+              return (
+                <FieldRow
+                  label="Last Cron Run"
+                  tooltip="Timestamp and outcome of the most recent scheduled cron execution. 'Up to date' means the cron ran but the M365 feed version had not changed since the last sync, so no update was needed."
+                >
+                  <div className="flex items-center gap-2 justify-end">
+                    <Text variant="secondary">{formatDate(data.lastCronRun!.timestamp)}</Text>
+                    <Badge variant={badge.variant}>{badge.label}{versionSuffix}</Badge>
+                  </div>
+                </FieldRow>
+              );
+            })()}
           </div>
         )}
       </div>

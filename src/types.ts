@@ -87,6 +87,8 @@ export interface ScheduleState {
   cron: string;
   /** Whether the scheduled handler is paused (skips cron runs) */
   paused: boolean;
+  /** Info about the most recent cron-triggered run (undefined if no cron has run yet) */
+  lastCronRun?: CronRunInfo;
 }
 
 export interface RemoveResult {
@@ -152,4 +154,14 @@ export interface HistoryEntry {
   /** Error fields (present when outcome="error") */
   errorType?: string;
   errorMessage?: string;
+}
+
+/** Info about the most recent cron-triggered sync run, derived from the history log. */
+export interface CronRunInfo {
+  /** ISO 8601 timestamp of the cron run */
+  timestamp: string;
+  /** Outcome of the cron run */
+  outcome: HistoryOutcome;
+  /** M365 endpoint version at the time of the run (present for sync runs) */
+  version?: string;
 }

@@ -140,7 +140,7 @@ The header includes a Sun/Moon toggle button for switching between light and dar
 The dashboard has five cards on the Dashboard tab:
 
 - **Activity**: Shows last sync time, M365 version, entry counts, dry-run flag, and any errors. Auto-refreshes every 60 seconds.
-- **Schedule**: Displays the cron schedule and description, shows whether syncs are active or paused, provides a pause/resume toggle, a "Sync Now" button, and a "Remove Managed" button to remove all M365-managed entries while preserving others (requires confirmation).
+- **Schedule**: Displays the cron schedule and whether syncs are active or paused. Shows the timestamp and outcome of the most recent cron run (including skipped runs where the M365 feed version had not changed), so you can confirm the schedule is executing even when no entries were updated. Provides a pause/resume toggle, a "Sync Now" button, and a "Remove Managed" button (requires confirmation).
 - **Services**: Toggle switches for each configurable service area (Exchange, SharePoint, Skype). At least one service must remain selected. The Common service area is always included and is shown as a read-only info row. Changes are saved to KV via `POST /api/services` and take effect on the next sync (scheduled or manual). See [Configuring service areas](#configuring-service-areas) below.
 - **Preview**: Shows a "Run Preview" button that fetches and displays the diff of entries that would be added or removed on the next sync.
 - **Current Configuration**: Shows a "Load Configuration" button that fetches and displays the current split tunnel exclude list, partitioned into managed and preserved entries in scrollable tables.
@@ -160,7 +160,7 @@ The **History** tab shows a chronological log of all sync and remove operations 
 | GET | `/api/status` | Yes | Last sync metadata, including version, timestamp, result summary, and last error |
 | GET | `/api/preview` | Yes | Dry-run diff of what would change on the next sync, without writing anything |
 | POST | `/api/sync` | Yes | Trigger an immediate sync |
-| GET | `/api/schedule` | Yes | Current schedule state: cron expression, description, and paused flag |
+| GET | `/api/schedule` | Yes | Current schedule state: cron expression, paused flag, and last cron run info |
 | POST | `/api/schedule` | Yes | Update the schedule pause state |
 | GET | `/api/services` | Yes | Returns `{ services: string[] \| null }` — the currently persisted service area selection (`null` means all services) |
 | POST | `/api/services` | Yes | Save the service area selection. Body: `{ services: string[] \| null }`. Valid service names: `Exchange`, `SharePoint`, `Skype`. `null` means all services |
@@ -288,8 +288,11 @@ The optional JSON body supports:
 | Field | Type | Description |
 |-------|------|-------------|
 | `cron` | string | The cron expression for the scheduled trigger (from `CRON_EXPRESSION` env var) |
-| `description` | string | Human-readable schedule description (from `CRON_DESCRIPTION` env var) |
 | `paused` | boolean | Whether the scheduled handler is currently paused |
+| `lastCronRun` | object | Info about the most recent cron-triggered sync run. Omitted if no cron has run yet |
+| `lastCronRun.timestamp` | string | ISO 8601 timestamp of the cron run |
+| `lastCronRun.outcome` | string | Result: `success`, `skipped`, `dry_run`, or `error` |
+| `lastCronRun.version` | string | M365 endpoint version at the time of the run (omitted if unavailable) |
 
 ### DELETE /api/managed response
 

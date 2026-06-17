@@ -27,6 +27,7 @@ export interface SyncResult {
 export interface ScheduleState {
   cron: string;
   paused: boolean;
+  lastCronRun?: CronRunInfo;
 }
 
 export interface RemoveResult {
@@ -157,4 +158,11 @@ export interface ServicesSummaryResponse {
   version: string;
   versionWarning?: string;
   services: ServiceSummary[];
+}
+
+/** Info about the most recent cron-triggered sync run. Mirrors src/types.ts CronRunInfo. */
+export interface CronRunInfo {
+  timestamp: string;
+  outcome: HistoryOutcome;
+  version?: string;
 }

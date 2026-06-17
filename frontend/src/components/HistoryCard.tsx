@@ -3,18 +3,7 @@ import { LayerCard, Text, Badge, Banner, Button, Tooltip } from "@cloudflare/kum
 import { ArrowsClockwise, Info } from "@phosphor-icons/react";
 import { fetchHistory } from "../lib/api";
 import type { HistoryEntry, HistoryOutcome, HistoryOpType, HistoryTrigger } from "../lib/types";
-
-function formatDate(iso: string): string {
-  if (!iso) return "-";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+import { formatDate } from "../lib/utils";
 
 function formatRelative(iso: string): string {
   if (!iso) return "-";

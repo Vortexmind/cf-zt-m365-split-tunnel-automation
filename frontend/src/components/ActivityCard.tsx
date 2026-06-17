@@ -4,18 +4,7 @@ import { ArrowsClockwise, Info } from "@phosphor-icons/react";
 import { fetchStatus } from "../lib/api";
 import type { SyncState } from "../lib/types";
 import { FieldRow } from "./FieldRow";
-
-function formatDate(iso: string | undefined): string {
-  if (!iso) return "Never";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+import { formatDate } from "../lib/utils";
 
 export function ActivityCard({ refreshKey }: { refreshKey?: number }) {
   const [data, setData] = useState<SyncState | null>(null);
@@ -56,7 +45,7 @@ export function ActivityCard({ refreshKey }: { refreshKey?: number }) {
       {error && <Banner variant="error" description={error} />}
       {data && (
         <div className="divide-y divide-kumo-hairline">
-          <FieldRow label="Last Synced" tooltip="Date and time of the last successful sync to Cloudflare">
+          <FieldRow label="Last Synced" tooltip="Timestamp of the last sync that wrote changes to Cloudflare. This is not updated when the cron runs but skips because the M365 feed version has not changed. Check the Schedule card for the last cron run time.">
             <Text variant="secondary">{formatDate(data.lastSyncedAt)}</Text>
           </FieldRow>
           <FieldRow label="M365 Version" tooltip="Microsoft's version identifier for the published endpoint dataset">

@@ -7,7 +7,7 @@ import { executeEntries } from "./handlers/entries";
 import { executeSummary } from "./handlers/summary";
 import { PermissionError, CfApiError, listDeviceProfiles } from "./cloudflare/client";
 import { loadState, loadPaused, savePaused, loadServices, saveServices, loadSettings, saveSettings, loadCron, saveCron, loadHistory } from "./state";
-import type { ScheduleState, SettingsOverride } from "./types";
+import type { ScheduleState, SettingsOverride, CronRunInfo } from "./types";
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -122,9 +122,17 @@ export default {
       }
 
       if (request.method === "GET" && path === "/api/schedule") {
-        const paused = await loadPaused(env.STATE);
-        const cron = await loadCron(env.STATE) ?? DEFAULT_CRON;
-        const schedule: ScheduleState = { cron, paused };
+        const [paused, rawCron, history] = await Promise.all([
+          loadPaused(env.STATE),
+          loadCron(env.STATE),
+          loadHistory(env.STATE),
+        ]);
+        const cron = rawCron ?? DEFAULT_CRON;
+        const lastCronEntry = history.find(e => e.trigger === "cron" && e.opType === "sync");
+        const lastCronRun: CronRunInfo | undefined = lastCronEntry
+          ? { timestamp: lastCronEntry.timestamp, outcome: lastCronEntry.outcome, version: lastCronEntry.version }
+          : undefined;
+        const schedule: ScheduleState = { cron, paused, lastCronRun };
         return jsonResponse(schedule);
       }
 
@@ -141,8 +149,16 @@ export default {
         }
         await savePaused(env.STATE, paused);
         console.log(JSON.stringify({ event: "schedule.update", paused }));
-        const cron = await loadCron(env.STATE) ?? DEFAULT_CRON;
-        const schedule: ScheduleState = { cron, paused };
+        const [rawCron, history] = await Promise.all([
+          loadCron(env.STATE),
+          loadHistory(env.STATE),
+        ]);
+        const cron = rawCron ?? DEFAULT_CRON;
+        const lastCronEntry = history.find(e => e.trigger === "cron" && e.opType === "sync");
+        const lastCronRun: CronRunInfo | undefined = lastCronEntry
+          ? { timestamp: lastCronEntry.timestamp, outcome: lastCronEntry.outcome, version: lastCronEntry.version }
+          : undefined;
+        const schedule: ScheduleState = { cron, paused, lastCronRun };
         return jsonResponse(schedule);
       }
 
