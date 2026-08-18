@@ -16,7 +16,7 @@
     "setup": "node scripts/setup.mjs"
   },
   "devDependencies": {
-    "@cloudflare/kumo": "^2.9.2",
+    "@cloudflare/kumo": "^2.10.0",
     "@cloudflare/vite-plugin": "latest",
     "@cloudflare/vitest-pool-workers": "latest",
     "@phosphor-icons/react": "^2.1.10",
@@ -34,6 +34,6 @@
     "wrangler": "latest"
   },
   "dependencies": {
-    "jose": "^6.2.8"
+    "jose": "^6.2.9"
   }
 }
