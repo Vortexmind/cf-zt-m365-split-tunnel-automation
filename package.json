@@ -16,7 +16,7 @@
     "setup": "node scripts/setup.mjs"
   },
   "devDependencies": {
-    "@cloudflare/kumo": "^2.10.0",
+    "@cloudflare/kumo": "^2.12.0",
     "@cloudflare/vite-plugin": "latest",
     "@cloudflare/vitest-pool-workers": "latest",
     "@phosphor-icons/react": "^2.1.10",
@@ -24,16 +24,16 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@vitejs/plugin-react": "^6.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.0",
     "typescript": "latest",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "latest",
     "wrangler": "latest"
   },
   "dependencies": {
-    "jose": "^6.2.9"
+    "jose": "^6.2.10"
   }
 }
