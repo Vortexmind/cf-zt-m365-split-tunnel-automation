@@ -15,6 +15,9 @@
 		},
 		"traces": {
 		"enabled": false
+		},    
+		"issues": {
+		 "enabled": true
 		}
 	},
 	"triggers": {
